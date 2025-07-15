@@ -7,9 +7,11 @@ import { IncomeModule } from './income/income.module';
 import { BudgetModule } from './budget/budget.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { TransactionsModule } from './transactions/transactions.module';
+import { CategoriesModule } from './categories/categories.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
-  imports: [AuthModule, UserModule, IncomeModule, BudgetModule, ExpensesModule, TransactionsModule],
+  imports: [AuthModule, UserModule, IncomeModule, BudgetModule, ExpensesModule, TransactionsModule, CategoriesModule, ReportsModule],
   controllers: [AppController],
   providers: [AppService],
 })

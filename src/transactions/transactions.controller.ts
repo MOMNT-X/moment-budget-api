@@ -1,7 +1,17 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import { UseGuards, Req } from '@nestjs/common';
+import { JwtGuard } from 'src/auth/jwt.guard';
 
 @Controller('transactions')
 export class TransactionsController {
@@ -12,9 +22,11 @@ export class TransactionsController {
     return this.transactionsService.create(createTransactionDto);
   }
 
-  @Get()
-  findAll() {
-    return this.transactionsService.findAll();
+  @UseGuards(JwtGuard)
+  @Get('me')
+  getMyTransactions(@Req() req) {
+    const userId = req.user.userId;
+    return this.transactionsService.findByUser(userId);
   }
 
   @Get(':id')
@@ -23,7 +35,10 @@ export class TransactionsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateTransactionDto: UpdateTransactionDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateTransactionDto: UpdateTransactionDto,
+  ) {
     return this.transactionsService.update(+id, updateTransactionDto);
   }
 

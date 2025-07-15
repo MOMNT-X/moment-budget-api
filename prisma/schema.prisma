@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+//  directUrl = env("DIRECT_URL")
+}
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  income    Float?
+  createdAt DateTime @default(now())
+
+  budgets     Budget[]
+  expenses    Expense[]
+  transactions Transaction[]
+  wallet      Wallet?
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Float    @default(0)
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model BudgetCategory {
+  id        String   @id @default(cuid())
+  name      String
+  budgets   Budget[]
+  expenses  Expense[]
+  transactions Transaction[]
+}
+
+model Budget {
+  id         String   @id @default(cuid())
+  userId     String
+  categoryId String
+  amount     Float
+  startDate  DateTime
+  endDate    DateTime
+  recurring  Boolean  @default(false)
+
+  user       User     @relation(fields: [userId], references: [id])
+  category   BudgetCategory @relation(fields: [categoryId], references: [id])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  description String?
+  categoryId  String
+  timestamp   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  category    BudgetCategory @relation(fields: [categoryId], references: [id])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Float
+  description String?
+  categoryId  String?
+  type        TransactionType
+  timestamp   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  category    BudgetCategory? @relation(fields: [categoryId], references: [id])
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
