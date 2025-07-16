@@ -1,10 +1,11 @@
 import { Entity, Column, ManyToOne } from 'typeorm';
-import { BaseEntity } from 'src/common/base.entity';
-import { User } from 'src/users/entities/user.entity';
+import { BaseEntity } from 'src/base-entity/base-entities';
+import { User } from 'src/user/entities/user.entity';
 
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE',
+  TRANSFER = 'TRANSFER',
 }
 
 @Entity()

@@ -1,9 +1,20 @@
-import { IsString, IsNumber, IsDateString } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsNumber,
+  IsDateString,
+  IsBoolean,
+  IsOptional,
+  IsEnum,
+} from 'class-validator';
+import { RecurrenceFrequency } from '@prisma/client';
 
 export class CreateBudgetDto {
+  @IsNotEmpty()
   @IsString()
   categoryId: string;
 
+  @IsNotEmpty()
   @IsNumber()
   amount: number;
 
@@ -12,4 +23,11 @@ export class CreateBudgetDto {
 
   @IsDateString()
   endDate: string;
+
+  @IsBoolean()
+  recurring: boolean;
+ 
+  @IsEnum(RecurrenceFrequency)
+  @IsOptional()
+  frequency?: RecurrenceFrequency;
 }

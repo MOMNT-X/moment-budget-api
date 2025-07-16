@@ -1,26 +1,37 @@
+// src/income/income.service.ts
 import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateIncomeDto } from './dto/create-income.dto';
-import { UpdateIncomeDto } from './dto/update-income.dto';
 
 @Injectable()
 export class IncomeService {
-  create(createIncomeDto: CreateIncomeDto) {
-    return 'This action adds a new income';
-  }
+  constructor(private prisma: PrismaService) {}
 
-  findAll() {
-    return `This action returns all income`;
-  }
+  async addIncome(userId: string, dto: CreateIncomeDto) {
+    const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
 
-  findOne(id: number) {
-    return `This action returns a #${id} income`;
-  }
+    if (!wallet) {
+      // Create wallet if it doesn't exist
+      await this.prisma.wallet.create({
+        data: {
+          userId,
+          balance: dto.amount,
+        },
+      });
+    } else {
+      await this.prisma.wallet.update({
+        where: { userId },
+        data: { balance: wallet.balance + dto.amount },
+      });
+    }
 
-  update(id: number, updateIncomeDto: UpdateIncomeDto) {
-    return `This action updates a #${id} income`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} income`;
+    return this.prisma.transaction.create({
+      data: {
+        userId,
+        amount: dto.amount,
+        description: dto.description,
+        type: 'INCOME',
+      },
+    });
   }
 }

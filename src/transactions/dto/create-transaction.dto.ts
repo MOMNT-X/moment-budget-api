@@ -12,7 +12,7 @@ export class CreateTransactionDto {
   type: TransactionType;
 
   @IsString()
-  category: string;
+  categoryId: string;
 
   @IsOptional()
   date?: string;

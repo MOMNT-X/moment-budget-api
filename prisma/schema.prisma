@@ -6,8 +6,9 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-//  directUrl = env("DIRECT_URL")
+  directUrl = env("DIRECT_URL")
 }
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -47,6 +48,8 @@ model Budget {
   startDate  DateTime
   endDate    DateTime
   recurring  Boolean  @default(false)
+  frequency   RecurrenceFrequency? // daily, weekly, monthly, yearly
+  nextRunDate DateTime?            // when to apply next instance
 
   user       User     @relation(fields: [userId], references: [id])
   category   BudgetCategory @relation(fields: [categoryId], references: [id])
@@ -77,6 +80,12 @@ model Transaction {
   category    BudgetCategory? @relation(fields: [categoryId], references: [id])
 }
 
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
 enum TransactionType {
   INCOME
   EXPENSE

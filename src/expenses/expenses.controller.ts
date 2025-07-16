@@ -1,34 +1,29 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { ExpensesService } from './expenses.service';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Req,
+} from '@nestjs/common';
+import { ExpenseService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
-import { UpdateExpenseDto } from './dto/update-expense.dto';
+import { JwtGuard } from '../auth/jwt.guard';
+
 
 @Controller('expenses')
-export class ExpensesController {
-  constructor(private readonly expensesService: ExpensesService) {}
+@UseGuards(JwtAuthGuard)
+export class ExpenseController {
+  constructor(private readonly expenseService: ExpenseService) {}
 
   @Post()
-  create(@Body() createExpenseDto: CreateExpenseDto) {
-    return this.expensesService.create(createExpenseDto);
+  create(@Body() dto: CreateExpenseDto, @Req() req) {
+    const userId = req.user.sub;
+    return this.expenseService.create(userId, dto);
   }
 
   @Get()
-  findAll() {
-    return this.expensesService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.expensesService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateExpenseDto: UpdateExpenseDto) {
-    return this.expensesService.update(+id, updateExpenseDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.expensesService.remove(+id);
+  findAll(@Body() dto: CreateExpenseDto, @Req() req) {
+    const userId = req.user.sub;
+    return this.expenseService.findUserExpenses(userId, dto);
   }
 }

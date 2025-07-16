@@ -10,4 +10,8 @@ export class CreateIncomeDto {
   @IsOptional()
   @IsDateString()
   date?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }

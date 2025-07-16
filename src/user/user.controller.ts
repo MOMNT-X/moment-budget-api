@@ -1,34 +1,20 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { UserService } from './user.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { Controller, Body, Patch, UseGuards } from '@nestjs/common';
+import { UsersService } from './user.service';
+import { UpdateIncomeDto } from '../income/dto/update-income.dto';
+import { JwtGuard } from '../auth/jwt.guard';
+import { GetUser } from './decorators/get-user.decorator';
 
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UsersService) {}
 
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.userService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(+id, updateUserDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
+  @UseGuards(JwtGuard)
+  /* @Put('income')
+  async updateIncome(@Req() req, @Body('income') income: number) {
+    return this.userService.updateIncome(req.user.sub, income);
+  } */
+  @Patch('income')
+  updateIncome(@GetUser('id') userId: string, @Body() dto: UpdateIncomeDto) {
+    return this.userService.updateIncome(userId, dto.income);
   }
 }

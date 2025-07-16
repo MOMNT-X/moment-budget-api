@@ -9,9 +9,12 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { CategoriesModule } from './categories/categories.module';
 import { ReportsModule } from './reports/reports.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { SummaryModule } from './summary/summary.module';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
-  imports: [AuthModule, UserModule, IncomeModule, BudgetModule, ExpensesModule, TransactionsModule, CategoriesModule, ReportsModule],
+  imports: [AuthModule, UserModule, IncomeModule, BudgetModule, ExpensesModule, TransactionsModule, CategoriesModule, ReportsModule, PrismaModule, SummaryModule, WalletModule],
   controllers: [AppController],
   providers: [AppService],
 })
