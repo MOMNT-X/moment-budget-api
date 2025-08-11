@@ -1,6 +1,16 @@
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -12,9 +22,15 @@ datasource db {
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
-  name      String?
+  firstName String?
+  lastName  String?
+  username  String   @unique
   password  String
   income    Float?
+  bankName           String?
+  bankCode           String?
+  accountNumber      String?
+  paystackSubaccount String?
   createdAt DateTime @default(now())
 
   budgets     Budget[]
@@ -28,13 +44,20 @@ model Wallet {
   userId    String   @unique
   balance   Float    @default(0)
   updatedAt DateTime @updatedAt
+  currency String   @default("NGN")
+   paystackAccountNumber  String?  @unique
+  paystackBankName        String?
+  paystackCustomerCode    String?
+  paystackRecipientCode  String?
+  subaccountCode          String @default("TEMP_CODE")   // Paystack subaccount code from signup
+
 
   user      User     @relation(fields: [userId], references: [id])
 }
 
 model BudgetCategory {
   id        String   @id @default(cuid())
-  name      String
+  name      String   @unique
   budgets   Budget[]
   expenses  Expense[]
   transactions Transaction[]
@@ -78,16 +101,4 @@ model Transaction {
 
   user        User     @relation(fields: [userId], references: [id])
   category    BudgetCategory? @relation(fields: [categoryId], references: [id])
-}
-
-enum RecurrenceFrequency {
-  DAILY
-  WEEKLY
-  MONTHLY
-  YEARLY
-}
-enum TransactionType {
-  INCOME
-  EXPENSE
-  TRANSFER
 }

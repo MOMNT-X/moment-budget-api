@@ -56,4 +56,11 @@ export class TransactionsService {
       orderBy: { timestamp: 'desc' },
     });
   }
+
+  async findAllUsers(userId: string) {
+    return this.prisma.transaction.findMany({
+      where: { userId },
+      include: { user: true },
+    });
+  }
 }

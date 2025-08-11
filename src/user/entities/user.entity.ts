@@ -1,12 +1,14 @@
-import { Entity, Column, OneToMany } from 'typeorm';
-import { Budget } from 'src/budget/entities/budget.entity';
-import { Expense } from 'src/expenses/entities/expense.entity';
 import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Entity, Column, OneToMany } from 'typeorm';
+import { Budget } from 'src/budget/entities/budget.entity';
+import { Expense } from 'src/expenses/entities/expense.entity';
 import { Transaction } from 'src/transactions/entities/transaction.entity';
+import { Income } from 'src/income/entities/income.entity';
+// import { Wallet } from 'src/wallet/entities/wallet.entity';
 @Entity()
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -24,11 +26,26 @@ export class User {
   @Column({ nullable: true })
   phone: string;
 
+  @Column({ nullable: true })
+  paystackSubaccountCode: string;
+
+  @Column({ nullable: true })
+  settlementBankCode: string;
+
+  @Column({ nullable: true })
+  accountNumber: string;
+
   @Column({ default: 0 })
   totalIncome: number;
 
   @OneToMany(() => Budget, (budget) => budget.user)
   budgets: Budget[];
+
+  @OneToMany(() => Income, (income) => income.user)
+  incomes: Income[];
+
+  /* @OneToMany(() => Wallet, (wallet) => wallet.user)
+  wallets: Wallet[]; */
 
   @OneToMany(() => Expense, (expense) => expense.user)
   expenses: Expense[];

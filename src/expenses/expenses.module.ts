@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ExpensesService } from './expenses.service';
-import { ExpensesController } from './expenses.controller';
+import { ExpenseService } from './expenses.service';
+import { ExpenseController } from './expenses.controller';
 
 @Module({
-  controllers: [ExpensesController],
-  providers: [ExpensesService],
+  controllers: [ExpenseController],
+  providers: [ExpenseService],
 })
-export class ExpensesModule {}
+export class ExpenseModule {}

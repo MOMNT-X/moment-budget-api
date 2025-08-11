@@ -12,7 +12,7 @@ import { UsersService } from '../user/user.service';
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '7d' },
+      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
   ],
   controllers: [AuthController],
@@ -20,4 +20,3 @@ import { UsersService } from '../user/user.service';
   exports: [AuthService, JwtStrategy],
 })
 export class AuthModule {}
-

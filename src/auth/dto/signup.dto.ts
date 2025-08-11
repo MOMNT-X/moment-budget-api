@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsString, MinLength, Matches, IsOptional } from 'class-validator';
 
 export class SignupDto {
   @IsEmail()
@@ -9,5 +9,22 @@ export class SignupDto {
   password: string;
 
   @IsString()
-  name: string;
+  firstName: string;
+  @IsString()
+  lastName: string;
+
+  @IsString()
+  username: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  bankCode?: string; // Paystack uses numeric bank code
+
+  @IsOptional()
+  @Matches(/^\d{10}$/, { message: 'Account number must be 10 digits' })
+  accountNumber?: string;
 }

@@ -11,7 +11,7 @@ export class IncomeController {
 
   @Post()
   addIncome(@Body() dto: CreateIncomeDto, @Req() req) {
-    const userId = req.user.sub;
+    const userId = req.user.userId;
     return this.incomeService.addIncome(userId, dto);
   }
 }

@@ -53,31 +53,31 @@ export class BudgetService {
       });
     }
   }
-  
+
   create(dto: CreateBudgetDto, userId: string) {
-  let nextRunDate: Date | null = null;
+    let nextRunDate: Date | null = null;
 
-  if (dto.recurring && dto.frequency) {
-    const base = new Date(dto.endDate);
-    switch (dto.frequency) {
-      case 'DAILY':
-        nextRunDate = addDays(base, 1);
-        break;
-      case 'WEEKLY':
-        nextRunDate = addWeeks(base, 1);
-        break;
-      case 'MONTHLY':
-        nextRunDate = addMonths(base, 1);
-        break;
+    if (dto.recurring && dto.frequency) {
+      const base = new Date(dto.endDate);
+      switch (dto.frequency) {
+        case 'DAILY':
+          nextRunDate = addDays(base, 1);
+          break;
+        case 'WEEKLY':
+          nextRunDate = addWeeks(base, 1);
+          break;
+        case 'MONTHLY':
+          nextRunDate = addMonths(base, 1);
+          break;
+      }
     }
-  }
 
-  return this.prisma.budget.create({
-    data: {
-      ...dto,
-      userId,
-      nextRunDate,
-    },
-  });
-}
+    return this.prisma.budget.create({
+      data: {
+        ...dto,
+        userId,
+        nextRunDate,
+      },
+    });
+  }
 }
