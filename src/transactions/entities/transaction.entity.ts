@@ -6,6 +6,8 @@ export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE',
   TRANSFER = 'TRANSFER',
+  DEPOSIT = 'DEPOSIT',
+  WITHDRAWAL = 'WITHDRAWAL',
 }
 
 @Entity()

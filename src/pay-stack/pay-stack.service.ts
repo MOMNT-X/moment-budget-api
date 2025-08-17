@@ -6,72 +6,99 @@ import { firstValueFrom } from 'rxjs';
 export class PaystackService {
   private readonly baseUrl =
     process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co';
-  private readonly secretKey = process.env.PAYSTACK_SECRET_KEY;
+  private readonly secretKey = process.env.PAYSTACK_SECRET_KEY!;
 
   constructor(private readonly http: HttpService) {}
+
+  private get headers() {
+    return { Authorization: `Bearer ${this.secretKey}` };
+  }
 
   async getBanks(countryCode = 'NG') {
     try {
       const { data } = await firstValueFrom(
         this.http.get(`${this.baseUrl}/bank?country=${countryCode}`, {
-          headers: { Authorization: `Bearer ${this.secretKey}` },
+          headers: this.headers,
         }),
       );
-      return data.data; // list of banks
-    } catch (err) {
+      return data.data;
+    } catch (err: any) {
       throw new BadRequestException(
         err.response?.data || 'Error fetching banks from Paystack',
       );
     }
   }
 
-  async createSubaccount(
-    businessName: string,
-    bankCode: string,
-    accountNumber: string,
-  ) {
+  // Accepts an object (matches how you'll call it)
+  async createSubaccount(payload: {
+    business_name: string;
+    bank_code: string;
+    account_number: string;
+    percentage_charge?: number; // default 0
+  }) {
     try {
-      const payload = {
-        business_name: businessName,
-        bank_code: bankCode,
-        account_number: accountNumber,
-        percentage_charge: 0, // no split unless you want
-      };
-
+      const body = { percentage_charge: 0, ...payload };
       const { data } = await firstValueFrom(
-        this.http.post(`${this.baseUrl}/subaccount`, payload, {
-          headers: { Authorization: `Bearer ${this.secretKey}` },
+        this.http.post(`${this.baseUrl}/subaccount`, body, {
+          headers: this.headers,
         }),
       );
-
-      return data.data.subaccount_code;
-    } catch (err) {
+      return data.data; // contains subaccount_code, settlement_bank, account_number, etc.
+    } catch (err: any) {
       throw new BadRequestException(
         err.response?.data || 'Error creating Paystack subaccount',
       );
     }
   }
 
-  async initializePayment(
-    amount: number,
-    email: string,
-    subaccountCode?: string,
-  ) {
+  async createTransferRecipient(payload: {
+    type: 'nuban';
+    name: string;
+    bank_code: string;
+    account_number: string;
+    currency?: 'NGN';
+  }) {
     try {
-      const payload: any = {
-        amount: amount * 100, // convert to kobo
-        email,
-      };
-      if (subaccountCode) payload.subaccount = subaccountCode;
-
+      const body = { currency: 'NGN', ...payload };
       const { data } = await firstValueFrom(
-        this.http.post(`${this.baseUrl}/transaction/initialize`, payload, {
-          headers: { Authorization: `Bearer ${this.secretKey}` },
+        this.http.post(`${this.baseUrl}/transferrecipient`, body, {
+          headers: this.headers,
         }),
       );
+      return data.data; // contains recipient_code
+    } catch (err: any) {
+      throw new BadRequestException(
+        err.response?.data || 'Error creating Paystack recipient',
+      );
+    }
+  }
 
-      return data.data; // contains authorization_url, access_code, reference
-    } catch (err) {
+  /**
+   * amount is expected in KOBO already (no extra *100).
+   */
+  async initializePayment(dto: {
+    amountKobo: number;
+    email: string;
+    subaccountCode?: string;
+    metadata?: Record<string, any>;
+    callback_url?: string;
+  }) {
+    try {
+      const payload: any = {
+        amount: dto.amountKobo,
+        email: dto.email,
+        bearer: dto.subaccountCode ? 'subaccount' : undefined,
+        subaccount: dto.subaccountCode,
+        metadata: dto.metadata,
+        callback_url: dto.callback_url,
+      };
+      const { data } = await firstValueFrom(
+        this.http.post(`${this.baseUrl}/transaction/initialize`, payload, {
+          headers: this.headers,
+        }),
+      );
+      return data; // { status, message, data: { authorization_url, access_code, reference } }
+    } catch (err: any) {
       throw new BadRequestException(
         err.response?.data || 'Error initializing payment',
       );
@@ -82,14 +109,42 @@ export class PaystackService {
     try {
       const { data } = await firstValueFrom(
         this.http.get(`${this.baseUrl}/transaction/verify/${reference}`, {
-          headers: { Authorization: `Bearer ${this.secretKey}` },
+          headers: this.headers,
         }),
       );
-
-      return data.data;
-    } catch (err) {
+      return data.data; // contains status, amount (kobo), reference, metadata, etc.
+    } catch (err: any) {
       throw new BadRequestException(
         err.response?.data || 'Error verifying payment',
+      );
+    }
+  }
+
+  /**
+   * Initiate payout to a recipient (amount in KOBO).
+   */
+  async initiateTransfer(dto: {
+    amountKobo: number;
+    recipientCode: string;
+    reason?: string;
+    reference?: string;
+  }) {
+    try {
+      const body = {
+        amount: dto.amountKobo,
+        recipient: dto.recipientCode,
+        reason: dto.reason,
+        reference: dto.reference,
+      };
+      const { data } = await firstValueFrom(
+        this.http.post(`${this.baseUrl}/transfer`, body, {
+          headers: this.headers,
+        }),
+      );
+      return data.data;
+    } catch (err: any) {
+      throw new BadRequestException(
+        err.response?.data || 'Error initiating transfer',
       );
     }
   }

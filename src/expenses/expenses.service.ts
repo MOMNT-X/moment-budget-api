@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { FilterExpenseDto } from './dto/filter-expense.dto';
 import { PaginateQuery } from 'nestjs-paginate';
+import { generateReference } from 'src/utils/reference.util';
 
 @Injectable()
 export class ExpenseService {
@@ -68,6 +69,7 @@ export class ExpenseService {
         description: dto.description,
         categoryId: dto.categoryId,
         type: 'EXPENSE',
+        reference: generateReference(),
       },
     });
 

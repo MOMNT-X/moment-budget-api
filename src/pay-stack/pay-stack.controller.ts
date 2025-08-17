@@ -1,34 +1,50 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { PayStackService } from './pay-stack.service';
-import { CreatePayStackDto } from './dto/create-pay-stack.dto';
-import { UpdatePayStackDto } from './dto/update-pay-stack.dto';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Body,
+  Param,
+} from '@nestjs/common';
+import { PaystackService } from './pay-stack.service';
 
-@Controller('pay-stack')
-export class PayStackController {
-  constructor(private readonly payStackService: PayStackService) {}
+@Controller('paystack')
+export class PaystackController {
+  constructor(private readonly paystackService: PaystackService) {}
 
-  @Post()
-  create(@Body() createPayStackDto: CreatePayStackDto) {
-    return this.payStackService.create(createPayStackDto);
+  @Get('banks')
+  async getBanks(@Query('country') country?: string) {
+    return this.paystackService.getBanks(country || 'NG');
   }
 
-  @Get()
-  findAll() {
-    return this.payStackService.findAll();
+  @Post('subaccount')
+  async createSubaccount(
+    @Body('businessName') businessName: string,
+    @Body('bankCode') bankCode: string,
+    @Body('accountNumber') accountNumber: string,
+  ) {
+    return this.paystackService.createSubaccount({
+      bank_code: bankCode,
+      account_number: accountNumber,
+      business_name: businessName
+    });
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.payStackService.findOne(+id);
+  @Post('initialize')
+  async initializePayment(
+    @Body('amount') amountKobo: number,
+    @Body('email') email: string,
+    @Body('subaccountCode') subaccountCode?: string,
+  ) {
+    return this.paystackService.initializePayment({
+      amountKobo: amountKobo * 100, // convert to kobo
+      email,
+      subaccountCode,
+    });
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePayStackDto: UpdatePayStackDto) {
-    return this.payStackService.update(+id, updatePayStackDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.payStackService.remove(+id);
+  @Get('verify/:reference')
+  async verifyPayment(@Param('reference') reference: string) {
+    return this.paystackService.verifyPayment(reference);
   }
 }

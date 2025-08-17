@@ -1,9 +1,17 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PaystackService } from './pay-stack.service';
-import { PayStackController } from './pay-stack.controller';
+import { PaystackController } from './pay-stack.controller';
+import { HttpModule } from '@nestjs/axios';
+import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
-  controllers: [PayStackController],
+  imports: [
+    HttpModule.register({
+      timeout: 10000,
+    }),
+    forwardRef(() => TransactionsModule),
+  ],
+  controllers: [PaystackController],
   providers: [PaystackService],
   exports: [PaystackService],
 })

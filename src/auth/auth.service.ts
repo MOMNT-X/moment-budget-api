@@ -5,6 +5,7 @@ import { UsersService } from '../user/user.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { PaystackService } from '../pay-stack/pay-stack.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
@@ -14,44 +15,62 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly paystackService: PaystackService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async signup(dto: SignupDto) {
     // hash password
     const hashed = await bcrypt.hash(dto.password, 10);
 
-    // create user
+    // create user (UserService will auto-create wallet too)
     const user = await this.usersService.create({
       ...dto,
       password: hashed,
     });
 
+    // find wallet that was created automatically with the user
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId: user.id },
+    });
+
     // if user has provided bank details, create Paystack subaccount
-    if (dto.bankCode && dto.accountNumber) {
+    if (dto.bankCode && dto.accountNumber && wallet) {
       try {
-        const businessName = dto.firstName && dto.lastName
-          ? `${dto.firstName} ${dto.lastName}`
-          : dto.username;
+        const businessName =
+          dto.firstName && dto.lastName
+            ? `${dto.firstName} ${dto.lastName}`
+            : dto.username;
 
-        const subaccountCode = await this.paystackService.createSubaccount(
-          businessName,
-          dto.bankCode,
-          dto.accountNumber,
-        );
-
-        await this.usersService.update(user.id, {
-          paystackSubaccount: subaccountCode,
+        const subaccount = await this.paystackService.createSubaccount({
+          business_name: businessName,
+          bank_code: dto.bankCode,
+          account_number: dto.accountNumber,
+          percentage_charge: 0,
         });
 
-        this.logger.log(`Created Paystack subaccount for user ${user.id}`);
+        await this.prisma.wallet.update({
+          where: { id: wallet.id },
+          data: {
+            paystackSubaccountCode: subaccount.subaccount_code,
+            paystackAccountNumber: subaccount.account_number,
+            paystackBankName: subaccount.bank_name,
+            paystackBusinessName: subaccount.business_name,
+          },
+        });
+
+        this.logger.log(
+          `Created Paystack subaccount for user ${user.id}: ${subaccount.subaccount_code}`,
+        );
       } catch (err) {
-        this.logger.error(`Failed to create Paystack subaccount for user ${user.id}`, err.stack);
-        // optionally throw if you want to prevent signup without Paystack
-        // throw new BadRequestException('Error creating Paystack subaccount');
+        this.logger.error(
+          `Failed to create Paystack subaccount for user ${user.id}`,
+          err.stack,
+        );
+        // optionally throw here if subaccount creation is mandatory
       }
     }
 
-    return this.signToken(user.id, user.email);
+    return this.signToken(user.id, user.email );
   }
 
   async login(dto: LoginDto) {

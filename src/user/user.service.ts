@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { User as PrismaUser } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -15,7 +16,22 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto): Promise<PrismaUser> {
-    return await this.prisma.user.create({ data: dto });
+    // Use a transaction so user + wallet are created atomically
+    const [user] = await this.prisma.$transaction([
+      this.prisma.user.create({ data: dto }),
+      this.prisma.wallet.create({
+        data: {
+          balance: 0, // default balance
+          currency: 'NGN', // adjust if you want multi-currency
+          paystackRecipientCode: null,
+          user: {
+            connect: { email: dto.email }, // link wallet to user
+          },
+        },
+      }),
+    ]);
+
+    return user;
   }
 
   async update(id: string, data: Prisma.UserUpdateInput) {

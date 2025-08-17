@@ -13,6 +13,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { SummaryModule } from './summary/summary.module';
 import { WalletModule } from './wallet/wallet.module';
 import { PaystackModule } from './pay-stack/pay-stack.module';
+import { HttpModule } from '@nestjs/axios';
 
 @Module({
   imports: [
@@ -28,6 +29,9 @@ import { PaystackModule } from './pay-stack/pay-stack.module';
     SummaryModule,
     WalletModule,
     PaystackModule,
+    HttpModule.register({
+      timeout: 10000,
+    }),
   ],
   controllers: [AppController],
   providers: [AppService],
