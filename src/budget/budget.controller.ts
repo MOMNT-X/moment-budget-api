@@ -7,6 +7,7 @@ import {
   UseGuards,
   Req,
   Param,
+  Query,
 } from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common/exceptions/forbidden.exception';
 import { JwtGuard } from '../auth/jwt.guard';
@@ -35,5 +36,18 @@ export class BudgetController {
       throw new ForbiddenException('Access denied');
     }
     return this.budgetService.getUserBudgets(userId);
+  }
+  @Get('summary')
+  getSummary(
+    @Req() req,
+    @Query('month') month?: string,
+    @Query('week') week?: string,
+    @Query('categoryId') categoryId?: string,
+  ) {
+    return this.budgetService.getBudgetSummary(req.user.userId, {
+      month: month ? parseInt(month, 10) : undefined,
+      week: week ? parseInt(week, 10) : undefined,
+      categoryId,
+    });
   }
 }

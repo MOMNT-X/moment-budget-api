@@ -19,21 +19,27 @@ export class AuthService {
   ) {}
 
   async signup(dto: SignupDto) {
-    // hash password
     const hashed = await bcrypt.hash(dto.password, 10);
 
-    // create user (UserService will auto-create wallet too)
-    const user = await this.usersService.create({
-      ...dto,
-      password: hashed,
-    });
+    let user;
+    try {
+      user = await this.usersService.create({
+        ...dto,
+        password: hashed,
+      });
+    } catch (err) {
+      if (err.code === 'P2002') {
+        throw new Error(`User with this ${err.meta.target} already exists`);
+      }
+      throw err;
+    }
 
-    // find wallet that was created automatically with the user
+    // find wallet created automatically with user
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId: user.id },
     });
 
-    // if user has provided bank details, create Paystack subaccount
+    // if user provided bank details → create Paystack subaccount + recipient
     if (dto.bankCode && dto.accountNumber && wallet) {
       try {
         const businessName =
@@ -41,6 +47,7 @@ export class AuthService {
             ? `${dto.firstName} ${dto.lastName}`
             : dto.username;
 
+        // 1. Create subaccount
         const subaccount = await this.paystackService.createSubaccount({
           business_name: businessName,
           bank_code: dto.bankCode,
@@ -48,6 +55,16 @@ export class AuthService {
           percentage_charge: 0,
         });
 
+        // 2. Create transfer recipient
+        const recipient = await this.paystackService.createTransferRecipient({
+          type: 'nuban',
+          name: businessName,
+          bank_code: dto.bankCode,
+          account_number: dto.accountNumber,
+          currency: 'NGN',
+        });
+
+        // 3. Save both in wallet
         await this.prisma.wallet.update({
           where: { id: wallet.id },
           data: {
@@ -55,32 +72,85 @@ export class AuthService {
             paystackAccountNumber: subaccount.account_number,
             paystackBankName: subaccount.bank_name,
             paystackBusinessName: subaccount.business_name,
+            paystackRecipientCode: recipient.recipient_code, // 👈 store this too
           },
         });
 
         this.logger.log(
-          `Created Paystack subaccount for user ${user.id}: ${subaccount.subaccount_code}`,
+          `Created Paystack subaccount (${subaccount.subaccount_code}) and recipient (${recipient.recipient_code}) for user ${user.id}`,
         );
       } catch (err) {
         this.logger.error(
-          `Failed to create Paystack subaccount for user ${user.id}`,
+          `Failed to create Paystack integration for user ${user.id}`,
           err.stack,
         );
-        // optionally throw here if subaccount creation is mandatory
       }
     }
 
-    return this.signToken(user.id, user.email );
+    // 🔑 generate JWT
+    const tokenPayload = await this.signToken(user.id, user.email);
+
+    // enriched response
+    return {
+      ...tokenPayload,
+      user: {
+        ...tokenPayload.user,
+        firstname: user.firstName,
+        lastname: user.lastName,
+        username: user.username,
+      },
+      wallet: wallet
+        ? {
+            id: wallet.id,
+            balance: wallet.balance,
+            subaccountCode: wallet.paystackSubaccountCode,
+            accountNumber: wallet.paystackAccountNumber,
+            bankName: wallet.paystackBankName,
+            recipientCode: wallet.paystackRecipientCode, // 👈 include in response
+          }
+        : null,
+    };
   }
 
   async login(dto: LoginDto) {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) {
+      throw new UnauthorizedException('No account found with this email');
+    }
 
     const valid = await bcrypt.compare(dto.password, user.password);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    if (!valid) {
+      throw new UnauthorizedException('Incorrect password, please try again');
+    }
 
-    return this.signToken(user.id, user.email);
+    // Fetch wallet info
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId: user.id },
+    });
+
+    // Generate JWT token
+    const tokenPayload = await this.signToken(user.id, user.email);
+
+    // Return enriched response
+    return {
+      ...tokenPayload,
+      user: {
+        ...tokenPayload.user,
+        firstname: user.firstName,
+        lastname: user.lastName,
+        username: user.username,
+      },
+      wallet: wallet
+        ? {
+            id: wallet.id,
+            balance: wallet.balance,
+            subaccountCode: wallet.paystackSubaccountCode,
+            accountNumber: wallet.paystackAccountNumber,
+            bankName: wallet.paystackBankName,
+            businessName: wallet.paystackBusinessName,
+          }
+        : null,
+    };
   }
 
   private async signToken(userId: string, email: string) {

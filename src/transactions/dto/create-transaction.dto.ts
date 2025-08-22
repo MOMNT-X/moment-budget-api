@@ -8,10 +8,6 @@ export class CreateTransactionDto {
   @IsNumber()
   amount: number;
 
-  @IsEmail()
-  @IsString()
-  email: string;
-
   @IsEnum(TransactionType)
   type: TransactionType;
 

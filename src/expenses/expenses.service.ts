@@ -155,4 +155,91 @@ export class ExpenseService {
       orderBy: { timestamp: 'desc' },
     });
   }
+
+  async findOneExpense(userId: string, expenseId: string) {
+    return this.prisma.expense.findFirst({
+      where: { id: expenseId, userId },
+    });
+  }
+
+  async getExpensesSummary(
+    userId: string,
+    filters: { month?: number; week?: number; categoryId?: string },
+  ) {
+    const { month, week, categoryId } = filters;
+    const where: any = { userId, type: 'EXPENSE' };
+
+    if (month) {
+      const start = new Date(new Date().getFullYear(), month - 1, 1);
+      const end = new Date(new Date().getFullYear(), month, 0, 23, 59, 59);
+      where.timestamp = { gte: start, lte: end };
+    }
+
+    if (week) {
+      const start = new Date();
+      start.setDate(start.getDate() - 7);
+      where.timestamp = { gte: start };
+    }
+
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
+
+    // ✅ use the built `where` object
+    const expenses = await this.prisma.transaction.findMany({
+      where,
+      include: { category: true },
+    });
+
+    const totalExpenses = expenses.reduce((sum, tx) => sum + tx.amount, 0);
+    const avgExpense =
+      expenses.length > 0 ? totalExpenses / expenses.length : 0;
+    const largestExpense =
+      expenses.length > 0 ? Math.max(...expenses.map((tx) => tx.amount)) : 0;
+
+    // Group by category
+    const categoryMap: Record<
+      string,
+      { name: string; amount: number; count: number }
+    > = {};
+    for (const tx of expenses) {
+      const catId = tx.categoryId ?? 'uncategorized';
+      if (!categoryMap[catId]) {
+        categoryMap[catId] = {
+          name: tx.category?.name || 'Uncategorized',
+          amount: 0,
+          count: 0,
+        };
+      }
+      categoryMap[catId].amount += tx.amount;
+      categoryMap[catId].count++;
+    }
+
+    const categoryBreakdown = Object.entries(categoryMap).map(
+      ([id, { name, amount, count }]) => ({
+        categoryId: id,
+        categoryName: name,
+        amount,
+        percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0,
+        transactions: count,
+      }),
+    );
+
+    return {
+      totalExpenses,
+      avgExpense,
+      largestExpense,
+      totalTransactions: expenses.length,
+      categoryBreakdown,
+    };
+  }
+
+  private getStartOfISOWeek(week: number, year: number): Date {
+    const simple = new Date(year, 0, 1 + (week - 1) * 7);
+    const dow = simple.getDay();
+    const start = simple;
+    if (dow <= 4) start.setDate(simple.getDate() - simple.getDay() + 1);
+    else start.setDate(simple.getDate() + 8 - simple.getDay());
+    return start;
+  }
 }

@@ -6,7 +6,7 @@ import {
   Req,
   UseGuards,
   Query,
-
+  Param
 } from '@nestjs/common';
 import { ExpenseService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -20,18 +20,38 @@ export class ExpenseController {
 
   @Post()
   create(@Body() dto: CreateExpenseDto, @Req() req) {
-    const userId = req.user.userId;
-    return this.expenseService.createExpense(userId, dto);
+    return this.expenseService.createExpense(req.user.userId, dto);
   }
 
+  // Get current user's expenses (filterable)
   @Get()
   findAll(@Query() dto: FilterExpenseDto, @Req() req) {
-    const userId = req.user.userId;
-    return this.expenseService.findUserExpenses(userId, dto);
+    return this.expenseService.findUserExpenses(req.user.userId, dto);
   }
 
+  // Get all users' expenses (paginated, filterable)
   @Get('all')
   getAllExpenses(@Query() query: PaginateQuery & FilterExpenseDto) {
     return this.expenseService.getExpenses(query, query);
+  }
+
+  // Get single expense (by id, scoped to user)
+  @Get(':id')
+  findOne(@Param('id') id: string, @Req() req) {
+    return this.expenseService.findOneExpense(req.user.userId, id);
+  }
+
+ @Get('summary')
+  async getExpensesSummary(
+    @Req() req: any, // you can replace `any` with your custom request user type
+    @Query('month') month?: string,
+    @Query('week') week?: string,
+    @Query('categoryId') categoryId?: string,
+  ) {
+    return this.expenseService.getExpensesSummary(req.user.userId, {
+      month: month ? parseInt(month, 10) : undefined,
+      week: week ? parseInt(week, 10) : undefined,
+      categoryId,
+    });
   }
 }
