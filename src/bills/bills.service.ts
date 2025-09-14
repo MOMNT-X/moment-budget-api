@@ -33,23 +33,23 @@ export class BillService {
     });
   }
 
-  async getBills(userId: string, status?: 'pending' | 'overdue' | 'paid') {
+  async getBills(userId: string, status?: 'PENDING' | 'OVERDUE' | 'PAID') {
     const now = new Date();
     let where: any = { userId };
 
-    if (status === 'pending') {
+    if (status === 'PENDING') {
       where = {
         ...where,
         billStatus: BillStatus.PENDING,
         dueDate: { gte: now },
       };
-    } else if (status === 'overdue') {
+    } else if (status === 'OVERDUE') {
       where = {
         ...where,
         billStatus: BillStatus.PENDING,
         dueDate: { lt: now },
       };
-    } else if (status === 'paid') {
+    } else if (status === 'PAID') {
       where = { ...where, billStatus: BillStatus.PAID };
     }
 

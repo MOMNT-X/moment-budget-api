@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class DashboardService {
@@ -96,12 +97,17 @@ export class DashboardService {
     };
   }
 
-
   async getTransactions(userId: string, limit: number) {
     return this.prisma.transaction.findMany({
       where: { userId },
       orderBy: { timestamp: 'desc' },
       take: limit,
+      select: {
+        id: true,
+        amount: true,
+        timestamp: true,
+        type: true,
+      },
     });
   }
 
@@ -144,5 +150,27 @@ export class DashboardService {
         };
       }),
     );
+  }
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        email: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        bankName: true,
+        accountNumber: true,
+        income: true,
+        bankCode: true,
+        paystackSubaccount: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
   }
 }

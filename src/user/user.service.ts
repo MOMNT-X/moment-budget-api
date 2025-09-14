@@ -16,20 +16,10 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto): Promise<PrismaUser> {
-    // Use a transaction so user + wallet are created atomically
-    const [user] = await this.prisma.$transaction([
-      this.prisma.user.create({ data: dto }),
-      this.prisma.wallet.create({
-        data: {
-          balance: 0, // default balance
-          currency: 'NGN', // adjust if you want multi-currency
-          paystackRecipientCode: null,
-          user: {
-            connect: { email: dto.email }, // link wallet to user
-          },
-        },
-      }),
-    ]);
+    // Create only the user, wallet creation will be handled in AuthService
+    const user = await this.prisma.user.create({ 
+      data: dto 
+    });
 
     return user;
   }
@@ -42,11 +32,26 @@ export class UsersService {
     return await this.prisma.user.findUnique({ where: { email } });
   }
 
-  async findById(id: string): Promise<PrismaUser> {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        bankName: true,
+        accountNumber: true,
+        bankCode: true,
+        createdAt: true,
+      },
+    });
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
     return user;
   }
 }

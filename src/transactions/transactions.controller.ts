@@ -25,7 +25,7 @@ export class TransactionsController {
     return this.transactionsService.create(userId, email, dto);
   }
 
-  @Get(':id')
+  @Get()
   findAll(@Req() req, @Query() filters: FilterTransactionDto) {
     return this.transactionsService.findAll(req.user.userId, filters);
   }

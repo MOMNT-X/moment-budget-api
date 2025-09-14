@@ -64,9 +64,11 @@ export class WalletService {
       callback_url: 'https://yourdomain.com/paystack/callback', // update to your real callback
     });
 
+    console.log('url:', paymentInit.data.authorization_url);
+    
     return {
       authorizationUrl: paymentInit.data.authorization_url,
-      reference: paymentInit.data.reference, // <-- include this
+      reference: paymentInit.data.reference, // <-- include this      
     };
   }
 

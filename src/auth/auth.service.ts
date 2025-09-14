@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../user/user.service';
+import { WalletService } from '../wallet/wallet.service'; // Add this import
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { PaystackService } from '../pay-stack/pay-stack.service';
@@ -16,12 +17,15 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly paystackService: PaystackService,
     private readonly prisma: PrismaService,
+    private readonly walletService: WalletService, // Add this injection
   ) {}
 
   async signup(dto: SignupDto) {
     const hashed = await bcrypt.hash(dto.password, 10);
 
     let user;
+    let wallet: any = null; // Fix typing issue
+
     try {
       user = await this.usersService.create({
         ...dto,
@@ -34,57 +38,45 @@ export class AuthService {
       throw err;
     }
 
-    // find wallet created automatically with user
-    const wallet = await this.prisma.wallet.findUnique({
-      where: { userId: user.id },
-    });
-
-    // if user provided bank details → create Paystack subaccount + recipient
-    if (dto.bankCode && dto.accountNumber && wallet) {
-      try {
+    // Create wallet for the user
+    try {
+      if (dto.bankCode && dto.accountNumber) {
+        // If user provided bank details, create wallet with Paystack integration
         const businessName =
           dto.firstName && dto.lastName
             ? `${dto.firstName} ${dto.lastName}`
             : dto.username;
 
-        // 1. Create subaccount
-        const subaccount = await this.paystackService.createSubaccount({
-          business_name: businessName,
-          bank_code: dto.bankCode,
-          account_number: dto.accountNumber,
-          percentage_charge: 0,
-        });
+        wallet = await this.walletService.createWalletForUser(
+          user.id,
+          user.email,
+          businessName,
+          dto.bankCode,
+          dto.accountNumber,
+        );
 
-        // 2. Create transfer recipient
-        const recipient = await this.paystackService.createTransferRecipient({
-          type: 'nuban',
-          name: businessName,
-          bank_code: dto.bankCode,
-          account_number: dto.accountNumber,
-          currency: 'NGN',
-        });
-
-        // 3. Save both in wallet
-        await this.prisma.wallet.update({
-          where: { id: wallet.id },
+        this.logger.log(
+          `Created wallet with Paystack integration for user ${user.id}`,
+        );
+      } else {
+        // Create basic wallet without Paystack integration
+        wallet = await this.prisma.wallet.create({
           data: {
-            paystackSubaccountCode: subaccount.subaccount_code,
-            paystackAccountNumber: subaccount.account_number,
-            paystackBankName: subaccount.bank_name,
-            paystackBusinessName: subaccount.business_name,
-            paystackRecipientCode: recipient.recipient_code, // 👈 store this too
+            userId: user.id,
+            balance: 0, // starting balance in kobo
+            currency: 'NGN',
           },
         });
 
-        this.logger.log(
-          `Created Paystack subaccount (${subaccount.subaccount_code}) and recipient (${recipient.recipient_code}) for user ${user.id}`,
-        );
-      } catch (err) {
-        this.logger.error(
-          `Failed to create Paystack integration for user ${user.id}`,
-          err.stack,
-        );
+        this.logger.log(`Created basic wallet for user ${user.id}`);
       }
+    } catch (err) {
+      this.logger.error(
+        `Failed to create wallet for user ${user.id}`,
+        err.stack,
+      );
+      // You might want to decide if you want to delete the user if wallet creation fails
+      // or just continue without a wallet
     }
 
     // 🔑 generate JWT
@@ -106,7 +98,7 @@ export class AuthService {
             subaccountCode: wallet.paystackSubaccountCode,
             accountNumber: wallet.paystackAccountNumber,
             bankName: wallet.paystackBankName,
-            recipientCode: wallet.paystackRecipientCode, // 👈 include in response
+            recipientCode: wallet.paystackRecipientCode,
           }
         : null,
     };

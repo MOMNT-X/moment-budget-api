@@ -9,19 +9,25 @@ export class DashboardController {
 
   @Get('summary')
   async getSummary(@Req() req) {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     return this.dashboardService.getSummary(userId);
   }
 
   @Get('transactions')
   async getTransactions(@Req() req, @Query('limit') limit: number = 10) {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     return this.dashboardService.getTransactions(userId, limit);
   }
 
   @Get('categories')
   async getCategories(@Req() req) {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     return this.dashboardService.getCategoryBreakdown(userId);
+  }
+
+  @Get('profile')
+  async getProfile(@Req() req ) {
+    const userId = req.user.userId;
+    return this.dashboardService.getProfile(userId);
   }
 }

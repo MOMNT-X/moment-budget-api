@@ -1,3 +1,116 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                 String        @id @default(cuid())
+  email              String        @unique
+  password           String
+  income             Float?
+  createdAt          DateTime      @default(now())
+  username           String        @unique
+  firstName          String?
+  lastName           String?
+  accountNumber      String?
+  bankCode           String?
+  bankName           String?
+  paystackSubaccount String?
+  bills              Bill[]        @relation("UserBills")
+  budgets            Budget[]
+  expenses           Expense[]
+  transactions       Transaction[]
+  wallet             Wallet?
+}
+
+model Wallet {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  balance                Float    @default(0)
+  updatedAt              DateTime @updatedAt
+  currency               String   @default("NGN")
+  paystackAccountNumber  String?  @unique
+  paystackBankName       String?
+  paystackCustomerCode   String?
+  paystackRecipientCode  String?
+  paystackBusinessName   String?
+  paystackSubaccountCode String   @default("TEMP_CODE")
+  user                   User     @relation(fields: [userId], references: [id])
+}
+
+model BudgetCategory {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  bills        Bill[]        @relation("CategoryBills")
+  budgets      Budget[]
+  expenses     Expense[]
+  transactions Transaction[]
+}
+
+model Budget {
+  id          String               @id @default(cuid())
+  userId      String
+  categoryId  String
+  amount      Float
+  startDate   DateTime
+  endDate     DateTime
+  recurring   Boolean              @default(false)
+  frequency   RecurrenceFrequency?
+  nextRunDate DateTime?
+  category    BudgetCategory       @relation(fields: [categoryId], references: [id])
+  user        User                 @relation(fields: [userId], references: [id])
+}
+
+model Expense {
+  id          String         @id @default(cuid())
+  userId      String
+  amount      Float
+  description String?
+  categoryId  String
+  timestamp   DateTime       @default(now())
+  category    BudgetCategory @relation(fields: [categoryId], references: [id])
+  user        User           @relation(fields: [userId], references: [id])
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  userId      String
+  amount      Float
+  description String?
+  categoryId  String?
+  type        TransactionType
+  timestamp   DateTime        @default(now())
+  metadata    Json?
+  reference   String          @unique
+  status      String          @default("pending")
+  category    BudgetCategory? @relation(fields: [categoryId], references: [id])
+  user        User            @relation(fields: [userId], references: [id])
+}
+
+model Bill {
+  id          String         @id @default(uuid())
+  userId      String
+  categoryId  String
+  amount      Int
+  description String
+  dueDate     DateTime
+  billStatus  BillStatus     @default(PENDING)
+  autoPay     Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  reference   String         @unique
+  paidAt      DateTime?
+  currency    String         @default("NGN")
+  category    BudgetCategory @relation("CategoryBills", fields: [categoryId], references: [id])
+  user        User           @relation("UserBills", fields: [userId], references: [id])
+}
+
 enum RecurrenceFrequency {
   DAILY
   WEEKLY
@@ -18,122 +131,3 @@ enum BillStatus {
   PAID
   OVERDUE
 }
-
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
-}
-
-model User {
-  id                 String   @id @default(cuid())
-  email              String   @unique
-  firstName          String?
-  lastName           String?
-  username           String   @unique
-  password           String
-  income             Float?
-  bankName           String?
-  bankCode           String?
-  accountNumber      String?
-  paystackSubaccount String?
-  createdAt          DateTime @default(now())
-
-  budgets      Budget[]
-  expenses     Expense[]
-  transactions Transaction[]
-  wallet       Wallet?
-  bills        Bill[]        @relation("UserBills")
-}
-
-model Wallet {
-  id                     String   @id @default(cuid())
-  userId                 String   @unique
-  balance                Float    @default(0)
-  updatedAt              DateTime @updatedAt
-  currency               String   @default("NGN")
-  paystackAccountNumber  String?  @unique
-  paystackBankName       String?
-  paystackCustomerCode   String?
-  paystackRecipientCode  String?
-  paystackSubaccountCode String   @default("TEMP_CODE") // Paystack subaccount code from signup
-  paystackBusinessName   String?
-
-  user User @relation(fields: [userId], references: [id])
-}
-
-model BudgetCategory {
-  id           String        @id @default(cuid())
-  name         String        @unique
-  budgets      Budget[]
-  expenses     Expense[]
-  transactions Transaction[]
-  bills        Bill[]        @relation("CategoryBills")
-}
-
-model Budget {
-  id          String               @id @default(cuid())
-  userId      String
-  categoryId  String
-  amount      Float
-  startDate   DateTime
-  endDate     DateTime
-  recurring   Boolean              @default(false)
-  frequency   RecurrenceFrequency? // daily, weekly, monthly, yearly
-  nextRunDate DateTime? // when to apply next instance
-
-  user     User           @relation(fields: [userId], references: [id])
-  category BudgetCategory @relation(fields: [categoryId], references: [id])
-}
-
-model Expense {
-  id          String   @id @default(cuid())
-  userId      String
-  amount      Float
-  description String?
-  categoryId  String
-  timestamp   DateTime @default(now())
-
-  user     User           @relation(fields: [userId], references: [id])
-  category BudgetCategory @relation(fields: [categoryId], references: [id])
-}
-
-model Transaction {
-  id          String          @id @default(cuid())
-  userId      String
-  amount      Float
-  description String?
-  categoryId  String?
-  type        TransactionType
-  timestamp   DateTime        @default(now())
-  status      String          @default("pending")
-  reference   String          @unique
-  metadata    Json?
-
-  user     User            @relation(fields: [userId], references: [id])
-  category BudgetCategory? @relation(fields: [categoryId], references: [id])
-}
-
-model Bill {
-  id          String     @id @default(uuid())
-  userId      String
-  categoryId  String
-  amount      Int // stored in kobo
-  description String
-  dueDate     DateTime
-  billStatus  BillStatus @default(PENDING)
-  autoPay     Boolean    @default(false)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  reference   String     @unique // unique reference for the bill
-  paidAt      DateTime?  
-  currency    String     @default("NGN")
-
-  category BudgetCategory @relation("CategoryBills", fields: [categoryId], references: [id])
-  user     User           @relation("UserBills", fields: [userId], references: [id])
-}
-

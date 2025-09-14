@@ -16,6 +16,7 @@ import { PaystackModule } from './pay-stack/pay-stack.module';
 import { HttpModule } from '@nestjs/axios';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { BillsController } from './bills/bills.controller';
+import { BillsModule } from './bills/bills.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { BillsController } from './bills/bills.controller';
       timeout: 10000,
     }),
     DashboardModule,
+    BillsModule,
   ],
   controllers: [AppController, BillsController],
   providers: [AppService],

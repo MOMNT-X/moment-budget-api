@@ -6,7 +6,8 @@ import {
   Req,
   UseGuards,
   Query,
-  Param
+  Param,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { ExpenseService } from './expenses.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -35,23 +36,29 @@ export class ExpenseController {
     return this.expenseService.getExpenses(query, query);
   }
 
+    @Get('summary')
+  async getExpensesSummary(
+    @Req() req,
+    @Query('month') month?: string,
+    @Query('week') week?: string,
+    @Query('categoryId') categoryId?: string,
+  ) {
+    try {
+      return await this.expenseService.getExpensesSummary(req.user.userId, {
+        month: month ? parseInt(month, 10) : undefined,
+        week: week ? parseInt(week, 10) : undefined,
+        categoryId,
+      });
+    } catch (error) {
+      console.error('Error in getExpensesSummary:', error);
+      throw new InternalServerErrorException('Something went wrong');
+    }
+  }
+  
   // Get single expense (by id, scoped to user)
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req) {
     return this.expenseService.findOneExpense(req.user.userId, id);
   }
 
- @Get('summary')
-  async getExpensesSummary(
-    @Req() req: any, // you can replace `any` with your custom request user type
-    @Query('month') month?: string,
-    @Query('week') week?: string,
-    @Query('categoryId') categoryId?: string,
-  ) {
-    return this.expenseService.getExpensesSummary(req.user.userId, {
-      month: month ? parseInt(month, 10) : undefined,
-      week: week ? parseInt(week, 10) : undefined,
-      categoryId,
-    });
-  }
 }
