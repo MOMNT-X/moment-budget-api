@@ -14,6 +14,9 @@ import { SummaryModule } from './summary/summary.module';
 import { WalletModule } from './wallet/wallet.module';
 import { PaystackModule } from './pay-stack/pay-stack.module';
 import { HttpModule } from '@nestjs/axios';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { BillsController } from './bills/bills.controller';
+import { BillsModule } from './bills/bills.module';
 
 @Module({
   imports: [
@@ -32,8 +35,10 @@ import { HttpModule } from '@nestjs/axios';
     HttpModule.register({
       timeout: 10000,
     }),
+    DashboardModule,
+    BillsModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, BillsController],
   providers: [AppService],
 })
 export class AppModule {}

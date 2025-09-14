@@ -17,16 +17,15 @@ export class TransactionsService {
    * dto.amount is assumed to be in NAIRA here; convert to KOBO for storage + Paystack.
    * If your DTO is already KOBO, drop the *100.
    */
-  async create(userId: string, dto: CreateTransactionDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.email) throw new BadRequestException('User email is required');
+  async create(userId: string, email: string, dto: CreateTransactionDto) {
+    if (!email) throw new BadRequestException('User email is required');
 
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
     const amountKobo = dto.amount * 100;
 
     const init = await this.paystackService.initializePayment({
       amountKobo,
-      email: user.email,
+      email,
       subaccountCode: wallet?.paystackSubaccountCode,
       metadata: {
         userId,
@@ -39,10 +38,10 @@ export class TransactionsService {
       data: {
         userId,
         categoryId: dto.categoryId ?? null,
-        amount: amountKobo, // store kobo
+        amount: amountKobo,
         reference: init.data.reference,
         description: dto.description,
-        type: dto.type as TransactionType, // must match your Prisma enum
+        type: dto.type as TransactionType,
         status: 'pending',
       },
     });

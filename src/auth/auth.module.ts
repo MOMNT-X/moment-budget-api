@@ -7,6 +7,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../user/user.service';
 import { PaystackModule } from '../pay-stack/pay-stack.module';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { PaystackModule } from '../pay-stack/pay-stack.module';
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
+    WalletModule,
     PaystackModule,
   ],
   controllers: [AuthController],

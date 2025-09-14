@@ -80,4 +80,52 @@ export class BudgetService {
       },
     });
   }
+
+  async getBudgetSummary(
+    userId: string,
+    filters: { month?: number; week?: number; categoryId?: string },
+  ) {
+    const { month, week, categoryId } = filters;
+    const where: any = { userId };
+
+    // Apply category filter if passed
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
+
+    // Apply time filters
+    let dateFilter: any = {};
+    if (month) {
+      const start = new Date(new Date().getFullYear(), month - 1, 1);
+      const end = new Date(new Date().getFullYear(), month, 0, 23, 59, 59);
+      dateFilter = { gte: start, lte: end };
+    }
+    if (week) {
+      const start = new Date();
+      start.setDate(start.getDate() - 7);
+      dateFilter = { gte: start };
+    }
+
+    // 1. Get total budget (sum of budget amounts)
+    const budgets = await this.prisma.budget.findMany({
+      where,
+      include: { category: true },
+    });
+    const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
+
+    // 2. Get expenses that fall into the same filters
+    const expenses = await this.prisma.transaction.findMany({
+      where: { userId, type: 'EXPENSE', timestamp: dateFilter, ...where },
+    });
+    const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+    // 3. Remaining
+    const remaining = totalBudget - totalSpent / 100; // convert kobo to naira
+
+    return {
+      totalBudget,
+      totalSpent,
+      remaining,
+    };
+  }
 }
