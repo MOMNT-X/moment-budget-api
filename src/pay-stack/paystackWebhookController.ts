@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTransactionDto } from './dto/create-transaction.dto';
-import { FilterTransactionDto } from './dto/filter-transaction.dto';
+import { CreateTransactionDto } from '../transactions/dto/create-transaction.dto';
+import { FilterTransactionDto } from '../transactions/dto/filter-transaction.dto';
 import { PaystackService } from '../pay-stack/pay-stack.service';
 import { TransactionType } from '@prisma/client';
 
@@ -28,11 +28,7 @@ export class TransactionsService {
       amountKobo,
       email: user.email,
       subaccountCode: wallet?.paystackSubaccountCode,
-      metadata: {
-        userId,
-        intent: 'generic_transaction',
-        categoryId: dto.categoryId,
-      },
+      metadata: { userId, intent: 'generic_transaction', categoryId: dto.categoryId },
     });
 
     await this.prisma.transaction.create({
@@ -56,11 +52,8 @@ export class TransactionsService {
   async confirmPayment(reference: string) {
     const verified = await this.paystackService.verifyPayment(reference);
 
-    const existing = await this.prisma.transaction.findFirst({
-      where: { reference },
-    });
-    if (!existing)
-      throw new BadRequestException('Transaction not found for reference');
+    const existing = await this.prisma.transaction.findFirst({ where: { reference } });
+    if (!existing) throw new BadRequestException('Transaction not found for reference');
 
     if (verified.status === 'success') {
       const updated = await this.prisma.transaction.update({
@@ -98,10 +91,9 @@ export class TransactionsService {
         ...(type && { type: type as any }),
         ...(minAmount && { amount: { gte: minAmount } }),
         ...(maxAmount && { amount: { lte: maxAmount } }),
-        ...(startDate &&
-          endDate && {
-            timestamp: { gte: new Date(startDate), lte: new Date(endDate) },
-          }),
+        ...(startDate && endDate && {
+          timestamp: { gte: new Date(startDate), lte: new Date(endDate) },
+        }),
       },
       orderBy: { timestamp: 'desc' },
     });

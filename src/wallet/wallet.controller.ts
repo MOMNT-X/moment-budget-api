@@ -26,7 +26,13 @@ export class WalletController {
   }
 
   @Post('create')
-  create(@Req() req, @Body()) {
-    return this.walletService.createWalletForUser(req.user.sub);
+  create(@Req() req, @Body() body) {
+    return this.walletService.createWalletForUser(
+      req.user.sub,
+      body.email,
+      body.bankCode,
+      body.accountNumber,
+      body.accountName,
+    );
   }
 }

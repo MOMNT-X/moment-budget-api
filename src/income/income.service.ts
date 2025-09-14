@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateIncomeDto } from './dto/create-income.dto';
+import { generateReference } from 'src/utils/reference.util';
 
 @Injectable()
 export class IncomeService {
@@ -30,6 +31,7 @@ export class IncomeService {
         amount: dto.amount,
         description: dto.description,
         type: 'INCOME',
+        reference: generateReference(),
       },
     });
   }

@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, IsEmail } from 'class-validator';
 
 export class DepositDto {
   @IsInt({ message: 'Amount must be an integer (Naira only, decimals not allowed)' })
@@ -8,4 +8,7 @@ export class DepositDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsEmail()
+  email: string;
 }

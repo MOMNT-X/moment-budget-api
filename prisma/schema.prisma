@@ -8,6 +8,8 @@ enum TransactionType {
   INCOME
   EXPENSE
   TRANSFER
+  WITHDRAWAL
+  DEPOSIT
 }
 generator client {
   provider = "prisma-client-js"
@@ -45,11 +47,13 @@ model Wallet {
   balance   Float    @default(0)
   updatedAt DateTime @updatedAt
   currency String   @default("NGN")
-   paystackAccountNumber  String?  @unique
+  paystackAccountNumber  String?  @unique
   paystackBankName        String?
   paystackCustomerCode    String?
   paystackRecipientCode  String?
-  subaccountCode          String @default("TEMP_CODE")   // Paystack subaccount code from signup
+  paystackSubaccountCode String @default("TEMP_CODE")   // Paystack subaccount code from signup
+  paystackBusinessName   String?
+
 
 
   user      User     @relation(fields: [userId], references: [id])
@@ -98,6 +102,9 @@ model Transaction {
   categoryId  String?
   type        TransactionType
   timestamp   DateTime @default(now())
+  status      String   @default("pending")
+  reference   String   @unique
+  metadata    Json?
 
   user        User     @relation(fields: [userId], references: [id])
   category    BudgetCategory? @relation(fields: [categoryId], references: [id])

@@ -8,6 +8,7 @@ import { DepositDto } from './dto/deposit.dto';
 import { PayDto } from './dto/pay.dto';
 import { TransactionType } from '../transactions/entities/transaction.entity';
 import { PaystackService } from '../pay-stack/pay-stack.service';
+import { generateReference } from '../utils/reference.util';
 
 @Injectable()
 export class WalletService {
@@ -26,7 +27,7 @@ export class WalletService {
   ) {
     const subaccount = await this.paystack.createSubaccount({
       business_name: businessName,
-      settlement_bank: bankCode,
+      bank_code: bankCode,
       account_number: accountNumber,
       percentage_charge: 0.0,
     });
@@ -58,9 +59,9 @@ export class WalletService {
 
     const paymentInit = await this.paystack.initializePayment({
       email: dto.email,
-      amount: amountInKobo, // already in kobo
-      subaccount: wallet.paystackSubaccountCode,
-      bearer: 'subaccount',
+      amountKobo: amountInKobo, // already in kobo
+      subaccountCode: wallet.paystackSubaccountCode,
+      callback_url: "https://paystack.api.com/callback",
     });
 
     return { authorizationUrl: paymentInit.data.authorization_url };
@@ -70,7 +71,7 @@ export class WalletService {
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
     if (!wallet) throw new NotFoundException('Wallet not found');
 
-    const transaction = await this.paystack.verifyTransaction(reference);
+    const transaction = await this.paystack.verifyPayment(reference);
     if (!transaction.status) {
       throw new BadRequestException('Transaction verification failed');
     }
@@ -94,6 +95,7 @@ export class WalletService {
         amount: amountInKobo,
         type: TransactionType.DEPOSIT,
         description: reference,
+        reference: generateReference(),
       },
     });
   }
@@ -159,6 +161,7 @@ export class WalletService {
           description: dto.description,
           type: TransactionType.EXPENSE,
           categoryId: dto.categoryId,
+          reference: generateReference(),
         },
       }),
     ]);
@@ -179,8 +182,8 @@ export class WalletService {
     }
 
     await this.paystack.initiateTransfer({
-      amount: amountInKobo,
-      recipient: wallet.paystackRecipientCode,
+      amountKobo: amountInKobo,
+      recipientCode: wallet.paystackRecipientCode,
       reason: 'User withdrawal',
     });
 
@@ -195,6 +198,7 @@ export class WalletService {
         amount: amountInKobo,
         description: 'Withdrawal to bank',
         type: TransactionType.WITHDRAWAL,
+        reference: generateReference(),
       },
     });
 
