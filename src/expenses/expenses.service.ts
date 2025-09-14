@@ -1,11 +1,13 @@
-// src/expense/expense.service.ts
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
+import { FilterExpenseDto } from './dto/filter-expense.dto';
+import { PaginateQuery } from 'nestjs-paginate';
+import { generateReference } from 'src/utils/reference.util';
 
 @Injectable()
 export class ExpenseService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async createExpense(userId: string, dto: CreateExpenseDto) {
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
@@ -27,7 +29,6 @@ export class ExpenseService {
       throw new ForbiddenException('No active budget for this category');
     }
 
-    // Optionally, fetch total expenses in this category for the current period
     const totalSpent = await this.prisma.expense.aggregate({
       where: {
         userId,
@@ -45,7 +46,6 @@ export class ExpenseService {
       throw new ForbiddenException('Budget exceeded for this category');
     }
 
-    // Record the expense
     const expense = await this.prisma.expense.create({
       data: {
         userId,
@@ -55,7 +55,6 @@ export class ExpenseService {
       },
     });
 
-    // Deduct from wallet
     await this.prisma.wallet.update({
       where: { userId },
       data: {
@@ -63,7 +62,6 @@ export class ExpenseService {
       },
     });
 
-    // Add to transaction log
     await this.prisma.transaction.create({
       data: {
         userId,
@@ -71,9 +69,90 @@ export class ExpenseService {
         description: dto.description,
         categoryId: dto.categoryId,
         type: 'EXPENSE',
+        reference: generateReference(),
       },
     });
 
     return expense;
+  }
+
+  async getExpenses(query: PaginateQuery, dto?: FilterExpenseDto) {
+    const filters: any = {};
+
+    if (dto?.category) {
+      filters.category = dto.category;
+    }
+
+    if (dto?.minAmount || dto?.maxAmount) {
+      filters.amount = {};
+      if (dto.minAmount) filters.amount.gte = dto.minAmount;
+      if (dto.maxAmount) filters.amount.lte = dto.maxAmount;
+    }
+
+    if (dto?.month) {
+      const [year, month] = dto.month.split('-').map(Number);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+      filters.timestamp = {
+        gte: startDate,
+        lte: endDate,
+      };
+    }
+
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.expense.findMany({
+        where: filters,
+        orderBy: { timestamp: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.expense.count({ where: filters }),
+    ]);
+
+    return {
+      items,
+      meta: {
+        totalItems: total,
+        itemCount: items.length,
+        itemsPerPage: limit,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+      },
+    };
+  }
+
+  async findUserExpenses(userId: string, dto: FilterExpenseDto) {
+    const filters: any = {
+      userId,
+    };
+
+    if (dto.category) {
+      filters.category = dto.category;
+    }
+
+    if (dto.minAmount || dto.maxAmount) {
+      filters.amount = {};
+      if (dto.minAmount) filters.amount.gte = dto.minAmount;
+      if (dto.maxAmount) filters.amount.lte = dto.maxAmount;
+    }
+
+    if (dto.month) {
+      const [year, month] = dto.month.split('-').map(Number);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+      filters.timestamp = {
+        gte: startDate,
+        lte: endDate,
+      };
+    }
+
+    return this.prisma.expense.findMany({
+      where: filters,
+      orderBy: { timestamp: 'desc' },
+    });
   }
 }

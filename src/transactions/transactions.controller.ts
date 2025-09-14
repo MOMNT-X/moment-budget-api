@@ -19,11 +19,16 @@ export class TransactionsController {
 
   @Post()
   create(@Body() dto: CreateTransactionDto, @Req() req) {
-    return this.transactionsService.create(req.user.sub, dto);
+    return this.transactionsService.create(req.user.userId, dto);
   }
 
   @Get()
   findAll(@Req() req, @Query() filters: FilterTransactionDto) {
-  return this.transactionsService.findAll(req.user.sub, filters);
+  return this.transactionsService.findAll(req.user.userId, filters);
+  }
+
+  @Get("allUsers")
+  findAllUsers(@Req() req) {
+    return this.transactionsService.findAllUsers(req.user.sub);
   }
 }

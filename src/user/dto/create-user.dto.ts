@@ -1,4 +1,10 @@
-import { IsString, IsEmail, IsNotEmpty } from 'class-validator';    
+import {
+  IsString,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  Matches,
+} from 'class-validator';
 export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
@@ -11,4 +17,15 @@ export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
   password: string;
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  bankCode?: string; // Paystack numeric code
+
+  @IsOptional()
+  @Matches(/^\d{10}$/, { message: 'Account number must be 10 digits' })
+  accountNumber?: string;
 }

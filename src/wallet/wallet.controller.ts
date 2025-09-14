@@ -19,4 +19,20 @@ export class WalletController {
   pay(@Req() req, @Body() dto: PayDto) {
     return this.walletService.pay(req.user.sub, dto);
   }
+
+  @Post('withdraw')
+  withdraw(@Req() req, @Body('amount') amount: number) {
+    return this.walletService.withdraw(req.user.sub, amount);
+  }
+
+  @Post('create')
+  create(@Req() req, @Body() body) {
+    return this.walletService.createWalletForUser(
+      req.user.sub,
+      body.email,
+      body.bankCode,
+      body.accountNumber,
+      body.accountName,
+    );
+  }
 }

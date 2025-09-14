@@ -6,18 +6,19 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../user/user.service';
+import { PaystackModule } from '../pay-stack/pay-stack.module';
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '7d' },
+      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
+    PaystackModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, UsersService, PrismaService, JwtStrategy],
   exports: [AuthService, JwtStrategy],
 })
 export class AuthModule {}
-

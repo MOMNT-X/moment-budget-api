@@ -1,11 +1,14 @@
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, IsEmail } from 'class-validator';
 
 export class DepositDto {
-  @IsNumber()
-  @Min(1)
-  amount: number;
+  @IsInt({ message: 'Amount must be an integer (Naira only, decimals not allowed)' })
+  @Min(1, { message: 'Minimum deposit is ₦1' })
+  amount: number; // Accept in Naira, will convert to kobo in service
 
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsEmail()
+  email: string;
 }

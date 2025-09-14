@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsEnum, IsOptional } from 'class-validator';
+import { IsString, IsNumber, IsEnum, IsOptional, IsEmail } from 'class-validator';
 import { TransactionType } from '../entities/transaction.entity';
 
 export class CreateTransactionDto {
@@ -7,6 +7,10 @@ export class CreateTransactionDto {
 
   @IsNumber()
   amount: number;
+
+  @IsEmail()
+  @IsString()
+  email: string;
 
   @IsEnum(TransactionType)
   type: TransactionType;
