@@ -13,9 +13,7 @@ export class TransactionsService {
   ) {}
 
   /**
-   * Creates a Paystack payment intent and stores a 'pending' transaction.
-   * dto.amount is assumed to be in NAIRA here; convert to KOBO for storage + Paystack.
-   * If your DTO is already KOBO, drop the *100.
+   * Create a new Paystack payment intent and store a "pending" transaction.
    */
   async create(userId: string, email: string, dto: CreateTransactionDto) {
     if (!email) throw new BadRequestException('User email is required');
@@ -52,6 +50,9 @@ export class TransactionsService {
     };
   }
 
+  /**
+   * Manual verification (used if you want to confirm explicitly from frontend).
+   */
   async confirmPayment(reference: string) {
     const verified = await this.paystackService.verifyPayment(reference);
 
@@ -63,22 +64,12 @@ export class TransactionsService {
 
     if (verified.status === 'success') {
       const updated = await this.prisma.transaction.update({
-        where: { id: existing.id }, // use unique ID
+        where: { id: existing.id },
         data: { status: 'success' },
       });
 
       // Adjust wallet after success
-      if (updated.type === 'INCOME') {
-        await this.prisma.wallet.update({
-          where: { userId: updated.userId },
-          data: { balance: { increment: updated.amount } }, // kobo
-        });
-      } else if (updated.type === 'EXPENSE') {
-        await this.prisma.wallet.update({
-          where: { userId: updated.userId },
-          data: { balance: { decrement: updated.amount } },
-        });
-      }
+      await this.adjustWallet(updated);
 
       return updated;
     } else {
@@ -89,6 +80,58 @@ export class TransactionsService {
     }
   }
 
+  /**
+   * Auto verification from Paystack webhook.
+   */
+  async autoConfirm(reference: string) {
+    const existing = await this.prisma.transaction.findFirst({
+      where: { reference },
+    });
+    if (!existing) return;
+
+    // Idempotency: prevent double-crediting
+    if (existing.status === 'success') return;
+
+    const verified = await this.paystackService.verifyPayment(reference);
+
+    if (verified.status === 'success') {
+      const updated = await this.prisma.transaction.update({
+        where: { id: existing.id },
+        data: { status: 'success' },
+      });
+
+      // Adjust wallet after success
+      await this.adjustWallet(updated);
+
+      return updated;
+    } else {
+      await this.prisma.transaction.update({
+        where: { id: existing.id },
+        data: { status: 'failed' },
+      });
+    }
+  }
+
+  /**
+   * Adjusts user wallet based on transaction type.
+   */
+  private async adjustWallet(transaction: any) {
+    if (transaction.type === 'INCOME') {
+      await this.prisma.wallet.update({
+        where: { userId: transaction.userId },
+        data: { balance: { increment: transaction.amount } }, // still in kobo
+      });
+    } else if (transaction.type === 'EXPENSE') {
+      await this.prisma.wallet.update({
+        where: { userId: transaction.userId },
+        data: { balance: { decrement: transaction.amount } },
+      });
+    }
+  }
+
+  /**
+   * List user transactions with filters.
+   */
   async findAll(userId: string, filters: FilterTransactionDto) {
     const { type, minAmount, maxAmount, startDate, endDate } = filters;
     return this.prisma.transaction.findMany({
@@ -106,6 +149,9 @@ export class TransactionsService {
     });
   }
 
+  /**
+   * Get all transactions + user details.
+   */
   async findAllUsers(userId: string) {
     return this.prisma.transaction.findMany({
       where: { userId },
