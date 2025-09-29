@@ -5,16 +5,17 @@ import {
   Body,
   Query,
   Req,
-  UseGuards,
-  Param,
   Headers,
-  HttpCode,
+  RawBodyRequest,
+  UseGuards,
 } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { JwtGuard } from '../auth/jwt.guard';
 import { FilterTransactionDto } from './dto/filter-transaction.dto';
 import * as crypto from 'crypto';
+
+
 
 @Controller('transactions')
 @UseGuards(JwtGuard)
@@ -23,52 +24,40 @@ export class TransactionsController {
 
   @Post()
   create(@Body() dto: CreateTransactionDto, @Req() req) {
-    const userId = req.user.userId;
-    const email = req.user.email;
-    return this.transactionsService.create(userId, email, dto);
+    return this.transactionsService.create(req.user.userId, dto);
   }
 
   @Get()
   findAll(@Req() req, @Query() filters: FilterTransactionDto) {
-    return this.transactionsService.findAll(req.user.userId, filters);
+  return this.transactionsService.findAll(req.user.userId, filters);
   }
 
-  @Get('allUsers')
+  @Get("allUsers")
   findAllUsers(@Req() req) {
     return this.transactionsService.findAllUsers(req.user.sub);
   }
 
-  @Post('confirm/:reference')
-  async confirmTPayment(@Param('reference') reference: string) {
-    return this.transactionsService.confirmPayment(reference);
-  }
-
   /**
-   * Paystack webhook endpoint
+   * Webhook endpoint called by Paystack after transactions
+   * NOTE: must be publicly accessible and registered in Paystack dashboard.
    */
   @Post('webhook')
-  @HttpCode(200)
   async handleWebhook(
-    @Body() body: any,
+    @Req() req: RawBodyRequest<Request>,
     @Headers('x-paystack-signature') signature: string,
   ) {
+    // Verify signature
     const secret = process.env.PAYSTACK_SECRET_KEY!;
-
-    // Verify Paystack signature
     const hash = crypto
       .createHmac('sha512', secret)
-      .update(JSON.stringify(body))
+      .update((req as any).rawBody) // ensure raw body middleware is enabled
       .digest('hex');
 
     if (hash !== signature) {
-      return { status: false, message: 'Invalid signature' };
+      return { status: 'error', message: 'Invalid signature' };
     }
 
-    // Handle successful charge
-    if (body.event === 'charge.success') {
-      await this.transactionsService.autoConfirm(body.data.reference);
-    }
-
-    return { status: true };
+    const payload = req.body;
+    return { status: 'ok' };
   }
 }

@@ -9,7 +9,7 @@ async function bootstrap() {
     app.use(
     bodyParser.json({
       verify: (req: any, res, buf) => {
-        if (req.originalUrl.startsWith('/webhooks/paystack')) {
+        if (req.originalUrl.startsWith('/transactions/webhooks/paystack')) {
           req.rawBody = buf.toString(); // store raw request body
         }
       },

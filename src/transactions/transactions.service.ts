@@ -4,6 +4,7 @@ import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { FilterTransactionDto } from './dto/filter-transaction.dto';
 import { PaystackService } from '../pay-stack/pay-stack.service';
 import { TransactionType } from '@prisma/client';
+import { transcode } from 'buffer';
 
 @Injectable()
 export class TransactionsService {
@@ -13,17 +14,20 @@ export class TransactionsService {
   ) {}
 
   /**
-   * Create a new Paystack payment intent and store a "pending" transaction.
+   * Creates a Paystack payment intent and stores a 'pending' transaction.
+   * dto.amount is assumed to be in NAIRA here; convert to KOBO for storage + Paystack.
+   * If your DTO is already KOBO, drop the *100.
    */
-  async create(userId: string, email: string, dto: CreateTransactionDto) {
-    if (!email) throw new BadRequestException('User email is required');
+  async create(userId: string, dto: CreateTransactionDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.email) throw new BadRequestException('User email is required');
 
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
     const amountKobo = dto.amount * 100;
 
     const init = await this.paystackService.initializePayment({
       amountKobo,
-      email,
+      email: user.email,
       subaccountCode: wallet?.paystackSubaccountCode,
       metadata: {
         userId,
@@ -36,10 +40,10 @@ export class TransactionsService {
       data: {
         userId,
         categoryId: dto.categoryId ?? null,
-        amount: amountKobo,
+        amount: amountKobo, // store kobo
         reference: init.data.reference,
         description: dto.description,
-        type: dto.type as TransactionType,
+        type: dto.type as TransactionType, // must match your Prisma enum
         status: 'pending',
       },
     });
@@ -50,9 +54,55 @@ export class TransactionsService {
     };
   }
 
-  /**
-   * Manual verification (used if you want to confirm explicitly from frontend).
-   */
+  async autoConfirmPayment(payload: any) {
+    const { reference, status, amount, customer } = payload.data;
+
+    // Ensure amount is in kobo (Paystack webhook sends kobo by default)
+    const amountKobo = amount;
+
+    // Find transaction by reference
+    let transaction = await this.prisma.transaction.findUnique({
+      where: { reference },
+    });
+
+    if (!transaction) {
+      // If transaction does not exist, create one for the user
+      const user = await this.prisma.user.findUnique({
+        where: { email: customer.email },
+      });
+
+      if (!user) {
+        throw new BadRequestException(`No user found for ${customer.email}`);
+      }
+
+      transaction = await this.prisma.transaction.create({
+        data: {
+          reference,
+          userId: user.id,
+          amount: amountKobo,
+          status: status === 'success' ? 'success' : 'failed',
+          type: 'DEPOSIT',
+        },
+      });
+    } else {
+      // Update transaction status if it exists
+      transaction = await this.prisma.transaction.update({
+        where: { id: transaction.id },
+        data: { status: status === 'success' ? 'success' : 'failed' },
+      });
+    }
+
+    // If successful, credit wallet
+    if (status === 'success') {
+      await this.prisma.wallet.update({
+        where: { userId: transaction.userId },
+        data: { balance: { increment: transaction.amount } },
+      });
+    }
+
+    return transaction;
+  }
+
   async confirmPayment(reference: string) {
     const verified = await this.paystackService.verifyPayment(reference);
 
@@ -64,12 +114,22 @@ export class TransactionsService {
 
     if (verified.status === 'success') {
       const updated = await this.prisma.transaction.update({
-        where: { id: existing.id },
+        where: { id: existing.id }, // use unique ID
         data: { status: 'success' },
       });
 
       // Adjust wallet after success
-      await this.adjustWallet(updated);
+      if (updated.type === 'INCOME') {
+        await this.prisma.wallet.update({
+          where: { userId: updated.userId },
+          data: { balance: { increment: updated.amount } }, // kobo
+        });
+      } else if (updated.type === 'EXPENSE') {
+        await this.prisma.wallet.update({
+          where: { userId: updated.userId },
+          data: { balance: { decrement: updated.amount } },
+        });
+      }
 
       return updated;
     } else {
@@ -80,58 +140,6 @@ export class TransactionsService {
     }
   }
 
-  /**
-   * Auto verification from Paystack webhook.
-   */
-  async autoConfirm(reference: string) {
-    const existing = await this.prisma.transaction.findFirst({
-      where: { reference },
-    });
-    if (!existing) return;
-
-    // Idempotency: prevent double-crediting
-    if (existing.status === 'success') return;
-
-    const verified = await this.paystackService.verifyPayment(reference);
-
-    if (verified.status === 'success') {
-      const updated = await this.prisma.transaction.update({
-        where: { id: existing.id },
-        data: { status: 'success' },
-      });
-
-      // Adjust wallet after success
-      await this.adjustWallet(updated);
-
-      return updated;
-    } else {
-      await this.prisma.transaction.update({
-        where: { id: existing.id },
-        data: { status: 'failed' },
-      });
-    }
-  }
-
-  /**
-   * Adjusts user wallet based on transaction type.
-   */
-  private async adjustWallet(transaction: any) {
-    if (transaction.type === 'INCOME') {
-      await this.prisma.wallet.update({
-        where: { userId: transaction.userId },
-        data: { balance: { increment: transaction.amount } }, // still in kobo
-      });
-    } else if (transaction.type === 'EXPENSE') {
-      await this.prisma.wallet.update({
-        where: { userId: transaction.userId },
-        data: { balance: { decrement: transaction.amount } },
-      });
-    }
-  }
-
-  /**
-   * List user transactions with filters.
-   */
   async findAll(userId: string, filters: FilterTransactionDto) {
     const { type, minAmount, maxAmount, startDate, endDate } = filters;
     return this.prisma.transaction.findMany({
@@ -149,9 +157,6 @@ export class TransactionsService {
     });
   }
 
-  /**
-   * Get all transactions + user details.
-   */
   async findAllUsers(userId: string) {
     return this.prisma.transaction.findMany({
       where: { userId },
