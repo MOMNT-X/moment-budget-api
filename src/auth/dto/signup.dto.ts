@@ -22,7 +22,6 @@ export class SignupDto {
   @IsString()
   username: string;
 
-  @IsOptional()
   @IsString()
   bankName?: string;
 

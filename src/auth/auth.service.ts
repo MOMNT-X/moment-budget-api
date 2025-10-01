@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../user/user.service';
+import { WalletService } from '../wallet/wallet.service'; // Add this import
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { PaystackService } from '../pay-stack/pay-stack.service';
@@ -16,71 +17,132 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly paystackService: PaystackService,
     private readonly prisma: PrismaService,
+    private readonly walletService: WalletService, // Add this injection
   ) {}
 
   async signup(dto: SignupDto) {
-    // hash password
     const hashed = await bcrypt.hash(dto.password, 10);
 
-    // create user (UserService will auto-create wallet too)
-    const user = await this.usersService.create({
-      ...dto,
-      password: hashed,
-    });
+    let user;
+    let wallet: any = null; // Fix typing issue
 
-    // find wallet that was created automatically with the user
-    const wallet = await this.prisma.wallet.findUnique({
-      where: { userId: user.id },
-    });
+    try {
+      user = await this.usersService.create({
+        ...dto,
+        password: hashed,
+      });
+    } catch (err) {
+      if (err.code === 'P2002') {
+        throw new Error(`User with this ${err.meta.target} already exists`);
+      }
+      throw err;
+    }
 
-    // if user has provided bank details, create Paystack subaccount
-    if (dto.bankCode && dto.accountNumber && wallet) {
-      try {
+    // Create wallet for the user
+    try {
+      if (dto.bankCode && dto.accountNumber) {
+        // If user provided bank details, create wallet with Paystack integration
         const businessName =
           dto.firstName && dto.lastName
             ? `${dto.firstName} ${dto.lastName}`
             : dto.username;
 
-        const subaccount = await this.paystackService.createSubaccount({
-          business_name: businessName,
-          bank_code: dto.bankCode,
-          account_number: dto.accountNumber,
-          percentage_charge: 0,
-        });
+        wallet = await this.walletService.createWalletForUser(
+          user.id,
+          user.email,
+          businessName,
+          dto.bankCode,
+          dto.accountNumber,
+        );
 
-        await this.prisma.wallet.update({
-          where: { id: wallet.id },
+        this.logger.log(
+          `Created wallet with Paystack integration for user ${user.id}`,
+        );
+      } else {
+        // Create basic wallet without Paystack integration
+        wallet = await this.prisma.wallet.create({
           data: {
-            paystackSubaccountCode: subaccount.subaccount_code,
-            paystackAccountNumber: subaccount.account_number,
-            paystackBankName: subaccount.bank_name,
-            paystackBusinessName: subaccount.business_name,
+            userId: user.id,
+            balance: 0, // starting balance in kobo
+            currency: 'NGN',
           },
         });
 
-        this.logger.log(
-          `Created Paystack subaccount for user ${user.id}: ${subaccount.subaccount_code}`,
-        );
-      } catch (err) {
-        this.logger.error(
-          `Failed to create Paystack subaccount for user ${user.id}`,
-          err.stack,
-        );
-        // optionally throw here if subaccount creation is mandatory
+        this.logger.log(`Created basic wallet for user ${user.id}`);
       }
+    } catch (err) {
+      this.logger.error(
+        `Failed to create wallet for user ${user.id}`,
+        err.stack,
+      );
+      // You might want to decide if you want to delete the user if wallet creation fails
+      // or just continue without a wallet
     }
 
-    return this.signToken(user.id, user.email );
+    // 🔑 generate JWT
+    const tokenPayload = await this.signToken(user.id, user.email);
+
+    // enriched response
+    return {
+      ...tokenPayload,
+      user: {
+        ...tokenPayload.user,
+        firstname: user.firstName,
+        lastname: user.lastName,
+        username: user.username,
+      },
+      wallet: wallet
+        ? {
+            id: wallet.id,
+            balance: wallet.balance,
+            subaccountCode: wallet.paystackSubaccountCode,
+            accountNumber: wallet.paystackAccountNumber,
+            bankName: wallet.paystackBankName,
+            recipientCode: wallet.paystackRecipientCode,
+          }
+        : null,
+    };
   }
 
   async login(dto: LoginDto) {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) {
+      throw new UnauthorizedException('No account found with this email');
+    }
 
     const valid = await bcrypt.compare(dto.password, user.password);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    if (!valid) {
+      throw new UnauthorizedException('Incorrect password, please try again');
+    }
 
-    return this.signToken(user.id, user.email);
+    // Fetch wallet info
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId: user.id },
+    });
+
+    // Generate JWT token
+    const tokenPayload = await this.signToken(user.id, user.email);
+
+    // Return enriched response
+    return {
+      ...tokenPayload,
+      user: {
+        ...tokenPayload.user,
+        firstname: user.firstName,
+        lastname: user.lastName,
+        username: user.username,
+      },
+      wallet: wallet
+        ? {
+            id: wallet.id,
+            balance: wallet.balance,
+            subaccountCode: wallet.paystackSubaccountCode,
+            accountNumber: wallet.paystackAccountNumber,
+            bankName: wallet.paystackBankName,
+            businessName: wallet.paystackBusinessName,
+          }
+        : null,
+    };
   }
 
   private async signToken(userId: string, email: string) {
