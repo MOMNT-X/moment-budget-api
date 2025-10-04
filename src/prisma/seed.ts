@@ -21,24 +21,28 @@ async function main() {
   console.log('Seeding default categories...');
 
   for (const name of defaultCategories) {
-    await prisma.budgetCategory.upsert({
+    const existing = await prisma.budgetCategory.findFirst({
       where: {
-        name_userId: {
-          name,
-          userId: null as any,
-        },
-      },
-      update: {},
-      create: {
         name,
-        userId: null,
-        isDefault: true,
+        userId: null, // this is fine in `findFirst`
       },
     });
-    console.log(`✓ Created/Updated category: ${name}`);
+
+    if (!existing) {
+      await prisma.budgetCategory.create({
+        data: {
+          name,
+          userId: null,
+          isDefault: true,
+        },
+      });
+      console.log(`✓ Created/Updated category: ${name}`);
+    } else {
+      console.log(`⏭️  Skipped existing category: ${name}`);
+    }
   }
 
-  console.log('Seeding completed!');
+  console.log('✅ Seeding completed!');
 }
 
 main()
