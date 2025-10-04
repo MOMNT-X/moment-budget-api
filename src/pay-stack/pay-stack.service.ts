@@ -148,4 +148,38 @@ export class PaystackService {
       );
     }
   }
+
+  async resolveAccountNumber(accountNumber: string, bankCode: string) {
+    try {
+      const { data } = await firstValueFrom(
+        this.http.get(
+          `${this.baseUrl}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
+          { headers: this.headers },
+        ),
+      );
+      return data.data;
+    } catch (err: any) {
+      throw new BadRequestException(
+        err.response?.data?.message ||
+          'Error verifying account details. Please check the account number and bank.',
+      );
+    }
+  }
+
+  async finalizeTransfer() {
+    try {
+      const { data } = await firstValueFrom(
+        this.http.post(
+          `${this.baseUrl}/transfer/finalize_transfer`,
+          {},
+          { headers: this.headers },
+        ),
+      );
+      return data.data;
+    } catch (err: any) {
+      throw new BadRequestException(
+        err.response?.data || 'Error finalizing transfer',
+      );
+    }
+  }
 }

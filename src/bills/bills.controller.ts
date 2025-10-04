@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import { BillService } from './bills.service';
 import { JwtGuard } from '../auth/jwt.guard';
+import { CreateBillDto } from './dto/create-bill.dto';
+import { PayBillTransferDto } from './dto/pay-bill-transfer.dto';
 
 @Controller('bills')
 @UseGuards(JwtGuard) // protect all bill routes
@@ -18,7 +20,7 @@ export class BillsController {
 
   // Create a new bill
   @Post()
-  async createBill(@Req() req, @Body() dto: any) {
+  async createBill(@Req() req, @Body() dto: CreateBillDto) {
     return this.billService.createBill(req.user.userId, dto);
   }
 
@@ -35,5 +37,14 @@ export class BillsController {
   @Post(':id/pay')
   async payBill(@Req() req, @Param('id') billId: string) {
     return this.billService.payBill(req.user.userId, billId);
+  }
+
+  @Post(':id/pay-transfer')
+  async payBillWithTransfer(
+    @Req() req,
+    @Param('id') billId: string,
+    @Body() dto: PayBillTransferDto,
+  ) {
+    return this.billService.payBillWithTransfer(req.user.userId, billId, dto);
   }
 }

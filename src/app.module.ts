@@ -20,6 +20,10 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { BillsController } from './bills/bills.controller';
 import { BillsModule } from './bills/bills.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { BeneficiariesModule } from './beneficiaries/beneficiaries.module';
+import { FinancialGoalsModule } from './financial-goals/financial-goals.module';
+import { RecurringExpensesModule } from './recurring-expenses/recurring-expenses.module';
+import { InsightsModule } from './insights/insights.module';
 
 @Module({
   imports: [
@@ -43,6 +47,10 @@ import { NotificationsModule } from './notifications/notifications.module';
     DashboardModule,
     BillsModule,
     NotificationsModule,
+    BeneficiariesModule,
+    FinancialGoalsModule,
+    RecurringExpensesModule,
+    InsightsModule,
   ],
   controllers: [AppController, BillsController],
   providers: [AppService],

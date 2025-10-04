@@ -23,13 +23,49 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Moment Budget API - A comprehensive personal finance management backend built with NestJS, featuring expense tracking, budgeting, bill payments via Paystack, financial goals, and AI-powered spending insights.
+
+## Features
+
+- **User Authentication** - JWT-based authentication
+- **Wallet Management** - Deposit, withdraw, and manage funds with Paystack integration
+- **Budget Tracking** - Create and monitor budgets by category
+- **Expense Tracking** - Manual and recurring expense management
+- **Bill Payments** - Pay bills via Paystack transfers with bank account verification
+- **Beneficiary Management** - Save frequently used payment recipients
+- **Financial Goals** - Set and track savings goals with progress monitoring
+- **Spending Insights** - AI-powered analytics and savings recommendations
+- **Automated Notifications** - Email alerts for bills, budgets, and transactions
+- **Recurring Expenses** - Automated tracking of recurring payments
+
+## Tech Stack
+
+- **Framework:** NestJS
+- **Database:** PostgreSQL with Prisma ORM
+- **Payment Processing:** Paystack
+- **Authentication:** JWT
+- **Scheduling:** @nestjs/schedule for cron jobs
+- **Email:** SendGrid / Nodemailer
 
 ## Project setup
 
 ```bash
 $ npm install
 ```
+
+### Database Setup
+
+**IMPORTANT:** Before running the application, you must set up the database:
+
+1. Copy `.env.example` to `.env` and fill in your database credentials
+2. Run Prisma migrations:
+
+```bash
+$ npx prisma generate
+$ npx prisma migrate dev
+```
+
+See [MIGRATION_INSTRUCTIONS.md](./MIGRATION_INSTRUCTIONS.md) for detailed setup instructions.
 
 ## Compile and run the project
 

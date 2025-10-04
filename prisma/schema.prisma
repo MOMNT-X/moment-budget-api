@@ -32,8 +32,10 @@ model User {
   transactions       Transaction[]
   wallet             Wallet?
   budgetAlerts       BudgetAlert[]
-
-  BudgetCategory BudgetCategory[]
+  beneficiaries      Beneficiary[]
+  financialGoals     FinancialGoal[]
+  recurringExpenses  RecurringExpense[]
+  BudgetCategory     BudgetCategory[]
 }
 
 model Wallet {
@@ -58,9 +60,11 @@ model BudgetCategory {
   userId       String?
   isDefault Boolean  @default(false)
   user         User?         @relation(fields: [userId], references: [id])
-  budgets      Budget[]
-  expenses     Expense[]
-  transactions Transaction[]
+  budgets           Budget[]
+  expenses          Expense[]
+  transactions      Transaction[]
+  financialGoals    FinancialGoal[]
+  recurringExpenses RecurringExpense[]
   
   @@unique([name, userId])
 }
@@ -112,22 +116,29 @@ model Transaction {
 }
 
 model Bill {
-  id          String         @id @default(uuid())
-  userId      String
-  categoryId  String
-  amount      Int
-  description String
-  dueDate     DateTime
-  billStatus  BillStatus     @default(PENDING)
-  autoPay     Boolean        @default(false)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  reference   String         @unique
-  paidAt      DateTime?
-  currency    String         @default("NGN")
-  
-  category    BudgetCategory @relation("CategoryBills", fields: [categoryId], references: [id])
-  user        User           @relation("UserBills", fields: [userId], references: [id])
+  id                      String         @id @default(uuid())
+  userId                  String
+  categoryId              String
+  amount                  Int
+  description             String
+  dueDate                 DateTime
+  billStatus              BillStatus     @default(PENDING)
+  autoPay                 Boolean        @default(false)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  reference               String         @unique
+  paidAt                  DateTime?
+  currency                String         @default("NGN")
+  recipientAccountNumber  String?
+  recipientAccountName    String?
+  recipientBankCode       String?
+  recipientBankName       String?
+  paystackRecipientCode   String?
+  beneficiaryId           String?
+
+  category                BudgetCategory @relation("CategoryBills", fields: [categoryId], references: [id])
+  user                    User           @relation("UserBills", fields: [userId], references: [id])
+  beneficiary             Beneficiary?   @relation(fields: [beneficiaryId], references: [id])
 }
 
 model BudgetAlert {
@@ -138,9 +149,60 @@ model BudgetAlert {
   percentUsed Float
   message     String
   createdAt   DateTime @default(now())
-  
+
   budget      Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Beneficiary {
+  id                    String   @id @default(cuid())
+  userId                String
+  name                  String
+  accountNumber         String
+  bankCode              String
+  bankName              String
+  paystackRecipientCode String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bills                 Bill[]
+
+  @@unique([userId, accountNumber, bankCode])
+}
+
+model FinancialGoal {
+  id          String         @id @default(cuid())
+  userId      String
+  name        String
+  targetAmount Float
+  currentAmount Float        @default(0)
+  deadline    DateTime?
+  categoryId  String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  status      GoalStatus     @default(ACTIVE)
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    BudgetCategory? @relation(fields: [categoryId], references: [id])
+}
+
+model RecurringExpense {
+  id          String               @id @default(cuid())
+  userId      String
+  amount      Float
+  description String
+  categoryId  String
+  frequency   RecurrenceFrequency
+  nextDueDate DateTime
+  startDate   DateTime             @default(now())
+  endDate     DateTime?
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    BudgetCategory       @relation(fields: [categoryId], references: [id])
 }
 
 enum RecurrenceFrequency {
@@ -163,4 +225,11 @@ enum BillStatus {
   PAID
   OVERDUE
   FAILED
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+  CANCELLED
 }
