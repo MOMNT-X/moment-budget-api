@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ConfigModule } from '@nestjs/config';
+import { HttpModule } from '@nestjs/axios';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -13,13 +16,15 @@ import { PrismaModule } from './prisma/prisma.module';
 import { SummaryModule } from './summary/summary.module';
 import { WalletModule } from './wallet/wallet.module';
 import { PaystackModule } from './pay-stack/pay-stack.module';
-import { HttpModule } from '@nestjs/axios';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { BillsController } from './bills/bills.controller';
 import { BillsModule } from './bills/bills.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
     IncomeModule,
@@ -37,6 +42,7 @@ import { BillsModule } from './bills/bills.module';
     }),
     DashboardModule,
     BillsModule,
+    NotificationsModule,
   ],
   controllers: [AppController, BillsController],
   providers: [AppService],

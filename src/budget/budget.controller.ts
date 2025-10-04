@@ -10,6 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common/exceptions/forbidden.exception';
+import { BadRequestException } from '@nestjs/common/exceptions/bad-request.exception';
 import { JwtGuard } from '../auth/jwt.guard';
 import { BudgetService } from './budget.service';
 import { CreateBudgetDto } from './dto/create-budget.dto';
@@ -19,9 +20,15 @@ import { CreateBudgetDto } from './dto/create-budget.dto';
 export class BudgetController {
   constructor(private readonly budgetService: BudgetService) {}
 
+  private getUserId(req: any): string {
+    const userId = req.user?.userId || req.user?.sub; // support both id and sub
+    if (!userId) throw new BadRequestException('Missing authenticated user ID');
+    return userId;
+  }
+
   @Post()
   create(@Body() dto: CreateBudgetDto, @Req() req) {
-    const userId = req.user.userId;
+    const userId = this.getUserId(req);
     return this.budgetService.createBudget(userId, dto);
   }
 

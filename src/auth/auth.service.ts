@@ -7,6 +7,7 @@ import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { PaystackService } from '../pay-stack/pay-stack.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { InternalServerErrorException } from '@nestjs/common/exceptions';
 
 @Injectable()
 export class AuthService {
@@ -75,9 +76,10 @@ export class AuthService {
         `Failed to create wallet for user ${user.id}`,
         err.stack,
       );
-      // You might want to decide if you want to delete the user if wallet creation fails
-      // or just continue without a wallet
+      throw new InternalServerErrorException('Wallet creation failed');
     }
+    // You might want to decide if you want to delete the user if wallet creation fails
+    // or just continue without a wallet
 
     // 🔑 generate JWT
     const tokenPayload = await this.signToken(user.id, user.email);
@@ -110,6 +112,9 @@ export class AuthService {
       throw new UnauthorizedException('No account found with this email');
     }
 
+    if (!user.password) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
     const valid = await bcrypt.compare(dto.password, user.password);
     if (!valid) {
       throw new UnauthorizedException('Incorrect password, please try again');
