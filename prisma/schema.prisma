@@ -12,7 +12,7 @@ datasource db {
 model User {
   id                 String        @id @default(cuid())
   email              String        @unique
-  password           String
+  password           String?
   income             Float?
   createdAt          DateTime      @default(now())
   username           String        @unique
@@ -22,11 +22,18 @@ model User {
   bankCode           String?
   bankName           String?
   paystackSubaccount String?
+  // OAuth fields
+  oauthProvider      String?
+  oauthProviderId    String?
+  
   bills              Bill[]        @relation("UserBills")
   budgets            Budget[]
   expenses           Expense[]
   transactions       Transaction[]
   wallet             Wallet?
+  budgetAlerts       BudgetAlert[]
+
+  BudgetCategory BudgetCategory[]
 }
 
 model Wallet {
@@ -48,9 +55,14 @@ model BudgetCategory {
   id           String        @id @default(cuid())
   name         String        @unique
   bills        Bill[]        @relation("CategoryBills")
+  userId       String?
+  isDefault Boolean  @default(false)
+  user         User?         @relation(fields: [userId], references: [id])
   budgets      Budget[]
   expenses     Expense[]
   transactions Transaction[]
+  
+  @@unique([name, userId])
 }
 
 model Budget {
@@ -63,8 +75,12 @@ model Budget {
   recurring   Boolean              @default(false)
   frequency   RecurrenceFrequency?
   nextRunDate DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @default(now()) @updatedAt
+  
   category    BudgetCategory       @relation(fields: [categoryId], references: [id])
   user        User                 @relation(fields: [userId], references: [id])
+  alerts      BudgetAlert[]
 }
 
 model Expense {
@@ -74,6 +90,7 @@ model Expense {
   description String?
   categoryId  String
   timestamp   DateTime       @default(now())
+  
   category    BudgetCategory @relation(fields: [categoryId], references: [id])
   user        User           @relation(fields: [userId], references: [id])
 }
@@ -89,6 +106,7 @@ model Transaction {
   metadata    Json?
   reference   String          @unique
   status      String          @default("pending")
+  
   category    BudgetCategory? @relation(fields: [categoryId], references: [id])
   user        User            @relation(fields: [userId], references: [id])
 }
@@ -107,8 +125,22 @@ model Bill {
   reference   String         @unique
   paidAt      DateTime?
   currency    String         @default("NGN")
+  
   category    BudgetCategory @relation("CategoryBills", fields: [categoryId], references: [id])
   user        User           @relation("UserBills", fields: [userId], references: [id])
+}
+
+model BudgetAlert {
+  id          String   @id @default(cuid())
+  budgetId    String
+  userId      String
+  threshold   Int
+  percentUsed Float
+  message     String
+  createdAt   DateTime @default(now())
+  
+  budget      Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum RecurrenceFrequency {
@@ -130,4 +162,5 @@ enum BillStatus {
   PENDING
   PAID
   OVERDUE
+  FAILED
 }
