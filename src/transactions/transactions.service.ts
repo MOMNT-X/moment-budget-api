@@ -26,7 +26,7 @@ export class TransactionsService {
     const init = await this.paystackService.initializePayment({
       amountKobo,
       email,
-      subaccountCode: wallet?.paystackSubaccountCode,
+      subaccountCode: wallet?.paystackSubaccountCode || undefined,
       metadata: {
         userId,
         intent: 'generic_transaction',

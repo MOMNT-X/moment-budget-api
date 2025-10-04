@@ -8,6 +8,7 @@ import { DepositDto } from './dto/deposit.dto';
 import { PayDto } from './dto/pay.dto';
 import { TransactionType } from '../transactions/entities/transaction.entity';
 import { PaystackService } from '../pay-stack/pay-stack.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { generateReference } from '../utils/reference.util';
 
 @Injectable()
@@ -15,9 +16,9 @@ export class WalletService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paystack: PaystackService,
+    private readonly notificationService: NotificationsService,
   ) {}
 
-  // Called during signup
   async createWalletForUser(
     userId: string,
     email: string,
@@ -25,6 +26,11 @@ export class WalletService {
     bankCode: string,
     accountNumber: string,
   ) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
     const subaccount = await this.paystack.createSubaccount({
       business_name: businessName,
       bank_code: bankCode,
@@ -42,7 +48,7 @@ export class WalletService {
     return this.prisma.wallet.create({
       data: {
         userId,
-        balance: 0, // kobo
+        balance: 0,
         paystackSubaccountCode: subaccount.subaccount_code,
         paystackBankName: subaccount.settlement_bank,
         paystackAccountNumber: subaccount.account_number,
@@ -60,15 +66,13 @@ export class WalletService {
     const paymentInit = await this.paystack.initializePayment({
       email: dto.email,
       amountKobo: amountInKobo,
-      subaccountCode: wallet.paystackSubaccountCode,
-      callback_url: 'https://yourdomain.com/paystack/callback', // update to your real callback
+      subaccountCode: wallet.paystackSubaccountCode || undefined,
+      callback_url: process.env.FRONTEND_URL + '/paystack/callback',
     });
 
-    console.log('url:', paymentInit.data.authorization_url);
-    
     return {
       authorizationUrl: paymentInit.data.authorization_url,
-      reference: paymentInit.data.reference, // <-- include this      
+      reference: paymentInit.data.reference,
     };
   }
 
@@ -76,12 +80,14 @@ export class WalletService {
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
     if (!wallet) throw new NotFoundException('Wallet not found');
 
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
     const transactionData = await this.paystack.verifyPayment(reference);
     if (!transactionData.status || transactionData.status !== 'success') {
       throw new BadRequestException('Transaction verification failed');
     }
 
-    // Prevent double processing
     const existingTx = await this.prisma.transaction.findFirst({
       where: { description: reference },
     });
@@ -89,29 +95,34 @@ export class WalletService {
       throw new BadRequestException('Transaction already processed');
     }
 
-    const amountInKobo = transactionData.amount; // kobo
+    const amountInKobo = transactionData.amount;
     const paidAt = transactionData.paidAt
       ? new Date(transactionData.paidAt)
       : new Date();
 
-    // Update wallet balance
     await this.prisma.wallet.update({
       where: { userId },
       data: { balance: { increment: amountInKobo } },
     });
 
-    // Create transaction with status 'success' and store paid_at
-    return this.prisma.transaction.create({
+    const transaction = await this.prisma.transaction.create({
       data: {
         userId,
         amount: amountInKobo,
         type: TransactionType.DEPOSIT,
         description: reference,
         reference: generateReference(),
-        status: 'success', // mark transaction successful
-        timestamp: paidAt, // store exact paid_at from Paystack
+        status: 'success',
+        timestamp: paidAt,
       },
     });
+
+    await this.notificationService.sendTransactionNotification(
+      user,
+      transaction,
+    );
+
+    return transaction;
   }
 
   async pay(userId: string, dto: PayDto) {
@@ -199,66 +210,203 @@ export class WalletService {
   async withdraw(userId: string, amount: number) {
     const amountInKobo = amount * 100;
 
-    const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
-    if (!wallet || wallet.balance < amountInKobo) {
-      throw new BadRequestException('Insufficient balance');
+    if (amount < 100) {
+      throw new BadRequestException('Minimum withdrawal amount is ₦100');
     }
 
-    // If no recipient code, create one
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      include: { user: true },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found');
+    }
+
+    const user = wallet.user;
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (wallet.balance < amountInKobo) {
+      throw new BadRequestException(
+        `Insufficient balance. Available: ₦${(wallet.balance / 100).toFixed(2)}, Requested: ₦${amount.toFixed(2)}`,
+      );
+    }
+
+    if (!wallet.paystackAccountNumber || !wallet.paystackBankName) {
+      throw new BadRequestException(
+        'Bank details not found. Please update your bank information.',
+      );
+    }
+
     let recipientCode = wallet.paystackRecipientCode;
 
     if (!recipientCode) {
-      // Fetch user details (adjust if your user table has different fields)
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { firstName: true, lastName: true },
-      });
+      const recipientName =
+        user.firstName && user.lastName
+          ? `${user.firstName} ${user.lastName}`
+          : user.username;
 
-      if (!wallet.paystackAccountNumber || !wallet.paystackBankName) {
-        throw new BadRequestException('Bank details missing in wallet');
+      try {
+        const recipient = await this.paystack.createTransferRecipient({
+          type: 'nuban',
+          name: recipientName,
+          bank_code: wallet.paystackBankName,
+          account_number: wallet.paystackAccountNumber,
+        });
+
+        recipientCode = recipient.recipient_code;
+
+        await this.prisma.wallet.update({
+          where: { userId },
+          data: { paystackRecipientCode: recipientCode },
+        });
+      } catch (error) {
+        throw new BadRequestException(
+          `Failed to create transfer recipient: ${error.message}`,
+        );
+      }
+    }
+
+    const reference = generateReference();
+    const withdrawal = await this.prisma.transaction.create({
+      data: {
+        userId,
+        amount: amountInKobo,
+        description: 'Withdrawal to bank account',
+        type: 'WITHDRAWAL',
+        reference,
+        status: 'pending',
+      },
+    });
+
+    try {
+      if (!recipientCode) {
+        throw new Error('Recipient code is required');
       }
 
-      const recipient = await this.paystack.createTransferRecipient({
-        type: 'nuban',
-        name: user
-          ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
-          : 'Wallet User',
-        bank_code: wallet.paystackBankName,
-        account_number: wallet.paystackAccountNumber,
+      const transfer = await this.paystack.initiateTransfer({
+        amountKobo: amountInKobo,
+        recipientCode,
+        reason: 'Wallet withdrawal',
+        reference,
       });
-
-      recipientCode = recipient.recipient_code;
 
       await this.prisma.wallet.update({
         where: { userId },
-        data: { paystackRecipientCode: recipientCode },
+        data: { balance: { decrement: amountInKobo } },
       });
-    }
 
-    // Send transfer
-    await this.paystack.initiateTransfer({
-      amountKobo: amountInKobo,
-      recipientCode: wallet.paystackRecipientCode!,
-      reason: 'User withdrawal',
+      await this.prisma.transaction.update({
+        where: { id: withdrawal.id },
+        data: {
+          status: 'processing',
+          metadata: {
+            transferCode: transfer.transfer_code,
+            transferId: transfer.id,
+          },
+        },
+      });
+
+      await this.notificationService.sendEmail(
+        user.email,
+        'Withdrawal Request Received',
+        `
+          <h2>Withdrawal Request</h2>
+          <p>Hello ${user.firstName || user.username},</p>
+          <p>Your withdrawal request has been received and is being processed.</p>
+          <ul>
+            <li><strong>Amount:</strong> ₦${amount.toFixed(2)}</li>
+            <li><strong>Account:</strong> ${wallet.paystackAccountNumber}</li>
+            <li><strong>Bank:</strong> ${wallet.paystackBankName}</li>
+            <li><strong>Reference:</strong> ${reference}</li>
+          </ul>
+          <p>Funds will be credited to your account within 24 hours.</p>
+        `,
+      );
+
+      return {
+        message: 'Withdrawal initiated successfully',
+        reference,
+        amount: amount,
+        status: 'processing',
+        estimatedArrival: '24 hours',
+      };
+    } catch (error) {
+      await this.prisma.transaction.delete({ where: { id: withdrawal.id } });
+
+      throw new BadRequestException(
+        `Withdrawal failed: ${error.message || 'Please try again later'}`,
+      );
+    }
+  }
+
+  async handleTransferWebhook(data: any) {
+    const { reference, status } = data;
+
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { reference },
     });
 
-    // Deduct balance + record transaction
-    await this.prisma.$transaction([
-      this.prisma.wallet.update({
-        where: { userId },
-        data: { balance: { decrement: amountInKobo } },
-      }),
-      this.prisma.transaction.create({
-        data: {
-          userId,
-          amount: amountInKobo,
-          description: 'Withdrawal to bank',
-          type: TransactionType.WITHDRAWAL,
-          reference: generateReference(),
-        },
-      }),
-    ]);
+    if (!transaction) {
+      console.error(`Transaction not found for reference: ${reference}`);
+      return;
+    }
 
-    return { message: 'Withdrawal successful' };
+    const user = await this.prisma.user.findUnique({
+      where: { id: transaction.userId },
+    });
+
+    if (!user) {
+      console.error(`User not found for transaction reference: ${reference}`);
+      return;
+    }
+
+    if (status === 'success') {
+      await this.prisma.transaction.update({
+        where: { id: transaction.id },
+        data: { status: 'success' },
+      });
+
+      await this.notificationService.sendEmail(
+        user.email,
+        'Withdrawal Successful',
+        `
+          <h2>Withdrawal Completed</h2>
+          <p>Hello ${user.firstName || user.username},</p>
+          <p>Your withdrawal has been completed successfully.</p>
+          <ul>
+            <li><strong>Amount:</strong> ₦${(transaction.amount / 100).toFixed(2)}</li>
+            <li><strong>Reference:</strong> ${reference}</li>
+          </ul>
+        `,
+      );
+    } else if (status === 'failed' || status === 'reversed') {
+      await this.prisma.$transaction([
+        this.prisma.wallet.update({
+          where: { userId: transaction.userId },
+          data: { balance: { increment: transaction.amount } },
+        }),
+        this.prisma.transaction.update({
+          where: { id: transaction.id },
+          data: { status: 'failed' },
+        }),
+      ]);
+
+      await this.notificationService.sendEmail(
+        user.email,
+        'Withdrawal Failed - Refunded',
+        `
+          <h2>Withdrawal Failed</h2>
+          <p>Hello ${user.firstName || user.username},</p>
+          <p>Your withdrawal could not be completed and has been refunded to your wallet.</p>
+          <ul>
+            <li><strong>Amount:</strong> ₦${(transaction.amount / 100).toFixed(2)}</li>
+            <li><strong>Reference:</strong> ${reference}</li>
+          </ul>
+        `,
+      );
+    }
   }
 }
