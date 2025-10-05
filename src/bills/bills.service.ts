@@ -40,7 +40,7 @@ export class BillService {
 
     if (!budget) {
       throw new BadRequestException(
-        'No active budget found for this category. Please create a budget first.'
+        'No active budget found for this category. Please create a budget first.',
       );
     }
 
@@ -62,7 +62,7 @@ export class BillService {
 
     if (alreadySpent + amountKobo > budgetAmount) {
       throw new BadRequestException(
-        `Bill amount exceeds budget. Budget: ₦${budget.amount}, Spent: ₦${alreadySpent / 100}, Bill: ₦${dto.amount}`
+        `Bill amount exceeds budget. Budget: ₦${budget.amount}, Spent: ₦${alreadySpent / 100}, Bill: ₦${dto.amount}`,
       );
     }
 
@@ -116,15 +116,15 @@ export class BillService {
   }
 
   async payBill(userId: string, billId: string) {
-    const bill = await this.prisma.bill.findUnique({ 
+    const bill = await this.prisma.bill.findUnique({
       where: { id: billId },
       include: { category: true },
     });
-    
+
     if (!bill || bill.userId !== userId) {
       throw new NotFoundException('Bill not found');
     }
-    
+
     if (bill.billStatus === BillStatus.PAID) {
       throw new BadRequestException('Bill already paid');
     }
@@ -147,7 +147,11 @@ export class BillService {
     return { message: 'Bill paid successfully', bill: updatedBill };
   }
 
-  async payBillWithTransfer(userId: string, billId: string, dto?: PayBillTransferDto) {
+  async payBillWithTransfer(
+    userId: string,
+    billId: string,
+    dto?: PayBillTransferDto,
+  ) {
     const bill = await this.prisma.bill.findUnique({
       where: { id: billId },
       include: { category: true, beneficiary: true },
@@ -189,18 +193,26 @@ export class BillService {
       recipientBankCode = bill.beneficiary.bankCode;
       recipientBankName = bill.beneficiary.bankName;
       recipientCode = bill.beneficiary.paystackRecipientCode || undefined;
-    } else if (dto?.recipientAccountNumber && dto?.recipientBankCode && dto?.recipientBankName) {
+    } else if (
+      dto?.recipientAccountNumber &&
+      dto?.recipientBankCode &&
+      dto?.recipientBankName
+    ) {
       recipientAccountNumber = dto.recipientAccountNumber;
       recipientBankCode = dto.recipientBankCode;
       recipientBankName = dto.recipientBankName;
-    } else if (bill.recipientAccountNumber && bill.recipientBankCode && bill.recipientBankName) {
+    } else if (
+      bill.recipientAccountNumber &&
+      bill.recipientBankCode &&
+      bill.recipientBankName
+    ) {
       recipientAccountNumber = bill.recipientAccountNumber;
       recipientBankCode = bill.recipientBankCode;
       recipientBankName = bill.recipientBankName;
       recipientCode = bill.paystackRecipientCode || undefined;
     } else {
       throw new BadRequestException(
-        'No recipient details provided. Please provide bank account details or select a beneficiary.'
+        'No recipient details provided. Please provide bank account details or select a beneficiary.',
       );
     }
 
@@ -212,7 +224,7 @@ export class BillService {
 
       if (!resolvedAccount || !resolvedAccount.account_name) {
         throw new BadRequestException(
-          'Could not verify recipient account details. Please check the account number and bank code.'
+          'Could not verify recipient account details. Please check the account number and bank code.',
         );
       }
 
@@ -257,6 +269,9 @@ export class BillService {
     });
 
     try {
+      if (!recipientCode) {
+        throw new Error('Recipient code is missing');
+      }
       const transfer = await this.paystack.initiateTransfer({
         amountKobo: bill.amount,
         recipientCode,
@@ -335,7 +350,7 @@ export class BillService {
   async checkDueBillsDaily() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -353,7 +368,7 @@ export class BillService {
     for (const bill of dueBills) {
       await this.notificationService.sendBillReminderNotification(
         bill.user,
-        bill
+        bill,
       );
     }
 
@@ -364,7 +379,7 @@ export class BillService {
   async autoPayBills() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -390,11 +405,11 @@ export class BillService {
         this.logger.log(`Auto-paid bill ${bill.id} for user ${bill.userId}`);
       } catch (error) {
         this.logger.error(`Failed to auto-pay bill ${bill.id}:`, error.message);
-        
-        const user = await this.prisma.user.findUnique({ 
-          where: { id: bill.userId } 
+
+        const user = await this.prisma.user.findUnique({
+          where: { id: bill.userId },
         });
-        
+
         if (user) {
           await this.notificationService.sendEmail(
             user.email,
@@ -404,7 +419,7 @@ export class BillService {
               <p>Hello ${user.firstName || user.username},</p>
               <p>We couldn't process auto-payment for: ${bill.description}</p>
               <p><strong>Reason:</strong> ${error.message}</p>
-            `
+            `,
           );
         }
       }
