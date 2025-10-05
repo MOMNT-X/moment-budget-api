@@ -1,12 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, startOfYear, endOfYear } from 'date-fns';
+import {
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+  startOfWeek,
+  endOfWeek,
+  startOfYear,
+  endOfYear,
+} from 'date-fns';
+
+export interface Trend {
+  month: string;
+  totalSpent: number;
+  transactionCount: number;
+}
 
 @Injectable()
 export class InsightsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSpendingInsights(userId: string, period: 'week' | 'month' | 'year' = 'month') {
+  async getSpendingInsights(
+    userId: string,
+    period: 'week' | 'month' | 'year' = 'month',
+  ) {
     const now = new Date();
     let startDate: Date;
     let endDate: Date;
@@ -38,20 +55,24 @@ export class InsightsService {
 
     const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-    const byCategory = expenses.reduce((acc, exp) => {
-      const categoryName = exp.category?.name || 'Uncategorized';
-      if (!acc[categoryName]) {
-        acc[categoryName] = { amount: 0, count: 0, percentage: 0 };
-      }
-      acc[categoryName].amount += exp.amount;
-      acc[categoryName].count += 1;
-      return acc;
-    }, {} as Record<string, { amount: number; count: number; percentage: number }>);
+    const byCategory = expenses.reduce(
+      (acc, exp) => {
+        const categoryName = exp.category?.name || 'Uncategorized';
+        if (!acc[categoryName]) {
+          acc[categoryName] = { amount: 0, count: 0, percentage: 0 };
+        }
+        acc[categoryName].amount += exp.amount;
+        acc[categoryName].count += 1;
+        return acc;
+      },
+      {} as Record<string, { amount: number; count: number; percentage: number }>,
+    );
 
-    Object.keys(byCategory).forEach(category => {
-      byCategory[category].percentage = totalSpent > 0
-        ? Math.round((byCategory[category].amount / totalSpent) * 10000) / 100
-        : 0;
+    Object.keys(byCategory).forEach((category) => {
+      byCategory[category].percentage =
+        totalSpent > 0
+          ? Math.round((byCategory[category].amount / totalSpent) * 10000) / 100
+          : 0;
     });
 
     const sortedCategories = Object.entries(byCategory)
@@ -64,7 +85,8 @@ export class InsightsService {
       endDate,
       totalSpent: totalSpent / 100,
       transactionCount: expenses.length,
-      averageTransaction: expenses.length > 0 ? totalSpent / expenses.length / 100 : 0,
+      averageTransaction:
+        expenses.length > 0 ? totalSpent / expenses.length / 100 : 0,
       topCategories: sortedCategories.map(([name, data]) => ({
         category: name,
         amount: data.amount / 100,
@@ -81,7 +103,7 @@ export class InsightsService {
   }
 
   async getSpendingTrends(userId: string, months = 6) {
-    const trends = [];
+    const trends: Trend[] = []; // ✅ fixed typing
     const now = new Date();
 
     for (let i = 0; i < months; i++) {
@@ -102,7 +124,10 @@ export class InsightsService {
       });
 
       trends.unshift({
-        month: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        month: date.toLocaleDateString('en-US', {
+          month: 'short',
+          year: 'numeric',
+        }),
         totalSpent: (expenses._sum.amount || 0) / 100,
         transactionCount: expenses._count,
       });
@@ -139,9 +164,10 @@ export class InsightsService {
 
         const spentAmount = spent._sum.amount || 0;
         const budgetAmountKobo = budget.amount * 100;
-        const percentUsed = budgetAmountKobo > 0
-          ? Math.round((spentAmount / budgetAmountKobo) * 10000) / 100
-          : 0;
+        const percentUsed =
+          budgetAmountKobo > 0
+            ? Math.round((spentAmount / budgetAmountKobo) * 10000) / 100
+            : 0;
 
         return {
           category: budget.category?.name,
@@ -149,9 +175,14 @@ export class InsightsService {
           spent: spentAmount / 100,
           remaining: Math.max((budgetAmountKobo - spentAmount) / 100, 0),
           percentUsed,
-          status: percentUsed >= 100 ? 'exceeded' : percentUsed >= 80 ? 'warning' : 'healthy',
+          status:
+            percentUsed >= 100
+              ? 'exceeded'
+              : percentUsed >= 80
+              ? 'warning'
+              : 'healthy',
         };
-      })
+      }),
     );
 
     return performance;
@@ -184,23 +215,31 @@ export class InsightsService {
       }
     }
 
-    const exceededBudgets = budgetPerformance.filter(b => b.status === 'exceeded');
+    const exceededBudgets = budgetPerformance.filter(
+      (b) => b.status === 'exceeded',
+    );
     if (exceededBudgets.length > 0) {
       recommendations.push({
         type: 'budget_exceeded',
         priority: 'high',
-        message: `You've exceeded ${exceededBudgets.length} budget(s). Review your spending in: ${exceededBudgets.map(b => b.category).join(', ')}`,
-        categories: exceededBudgets.map(b => b.category),
+        message: `You've exceeded ${exceededBudgets.length} budget(s). Review your spending in: ${exceededBudgets
+          .map((b) => b.category)
+          .join(', ')}`,
+        categories: exceededBudgets.map((b) => b.category),
       });
     }
 
-    const warningBudgets = budgetPerformance.filter(b => b.status === 'warning');
+    const warningBudgets = budgetPerformance.filter(
+      (b) => b.status === 'warning',
+    );
     if (warningBudgets.length > 0) {
       recommendations.push({
         type: 'budget_warning',
         priority: 'medium',
-        message: `You're close to exceeding ${warningBudgets.length} budget(s). Be cautious with: ${warningBudgets.map(b => b.category).join(', ')}`,
-        categories: warningBudgets.map(b => b.category),
+        message: `You're close to exceeding ${warningBudgets.length} budget(s). Be cautious with: ${warningBudgets
+          .map((b) => b.category)
+          .join(', ')}`,
+        categories: warningBudgets.map((b) => b.category),
       });
     }
 
@@ -210,7 +249,9 @@ export class InsightsService {
       const prevMonth = trends[trends.length - 2].totalSpent;
 
       if (lastMonth > prevMonth * 1.2) {
-        const increase = Math.round(((lastMonth - prevMonth) / prevMonth) * 100);
+        const increase = Math.round(
+          ((lastMonth - prevMonth) / prevMonth) * 100,
+        );
         recommendations.push({
           type: 'spending_increase',
           priority: 'medium',
