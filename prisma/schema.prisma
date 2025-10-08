@@ -22,7 +22,6 @@ model User {
   bankCode           String?
   bankName           String?
   paystackSubaccount String?
-  // OAuth fields
   oauthProvider      String?
   oauthProviderId    String?
   
@@ -35,7 +34,28 @@ model User {
   beneficiaries      Beneficiary[]
   financialGoals     FinancialGoal[]
   recurringExpenses  RecurringExpense[]
-  BudgetCategory     BudgetCategory[]
+  budgetCategories   BudgetCategory[]
+  notifications      Notification[]  // ✨ NEW: Added notifications relation
+}
+
+// ✨ NEW MODEL
+model Notification {
+  id           String           @id @default(cuid())
+  userId       String
+  title        String
+  message      String           @db.Text
+  type         NotificationType @default(INFO)
+  read         Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  
+  // Optional: metadata for linking to specific resources
+  resourceType String?          // e.g., 'transaction', 'bill', 'budget'
+  resourceId   String?          // ID of the related resource
+  
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Index for efficient queries
+  @@index([userId, read, createdAt])
 }
 
 model Wallet {
@@ -232,4 +252,11 @@ enum GoalStatus {
   COMPLETED
   PAUSED
   CANCELLED
+}
+
+// ✨ NEW ENUM
+enum NotificationType {
+  SUCCESS
+  INFO
+  WARNING
 }

@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Query,
-  Body,
-  Param,
-} from '@nestjs/common';
+import { Controller, Get, Post, Query, Body, Param } from '@nestjs/common';
 import { PaystackService } from './pay-stack.service';
 
 @Controller('paystack')
@@ -26,7 +19,7 @@ export class PaystackController {
     return this.paystackService.createSubaccount({
       bank_code: bankCode,
       account_number: accountNumber,
-      business_name: businessName
+      business_name: businessName,
     });
   }
 
@@ -46,5 +39,13 @@ export class PaystackController {
   @Get('verify/:reference')
   async verifyPayment(@Param('reference') reference: string) {
     return this.paystackService.verifyPayment(reference);
+  }
+
+  @Post('verify-account')
+  async resolveAccountNumber(
+    @Body('accountNumber') accountNumber: string,
+    @Body('bankCode') bankCode: string,
+  ) {
+    return this.paystackService.resolveAccountNumber(accountNumber, bankCode);
   }
 }

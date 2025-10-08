@@ -59,10 +59,9 @@ export class DashboardService {
 
     const monthlyBudget = await this.prisma.budget.aggregate({
       where: {
-        userId,
-        frequency: 'MONTHLY',
-        startDate: { lte: now },
-        endDate: { gte: now },
+      userId,
+      startDate: { lte: now },
+      endDate: { gte: now },
       },
       _sum: { amount: true },
     });
