@@ -1,3 +1,63 @@
+# Dependencies
 node_modules
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Build outputs
 dist
+build
+*.js.map
+
+# Environment files
 .env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Testing
+coverage
+.nyc_output
+*.test.ts
+*.spec.ts
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+docs/
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+
+# Docker
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile.dev
+
+# Prisma
+prisma/migrations/*/*.sql.log
+
+# Logs
+logs
+*.log
