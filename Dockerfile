@@ -11,8 +11,8 @@ RUN npm install --legacy-peer-deps
 # Copy the rest of the app
 COPY . .
 
-# Copy the .env file into the container (make sure it exists in root)
-COPY .env .env
+# # Copy the .env file into the container (make sure it exists in root)
+# COPY .env .env
 
 # Generate Prisma client
 RUN npx prisma generate
