@@ -9,13 +9,13 @@ dist
 build
 *.js.map
 
-# Environment files
-.env
-.env.local
-.env.development
-.env.test
-.env.production
-.env.*.local
+# # Environment files
+# .env
+# .env.local
+# .env.development
+# .env.test
+# .env.production
+# .env.*.local
 
 # IDE
 .vscode
