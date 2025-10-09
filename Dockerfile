@@ -17,6 +17,9 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
+# Build NestJS (creates dist/ folder)
+RUN npm run build
+
 # Expose the app port
 EXPOSE 3000
 
