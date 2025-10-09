@@ -1,4 +1,4 @@
-# Use official Node.js image (upgraded to Node 20 to fix engine warnings)
+# Use official Node.js image (Node 20 to match NestJS 11 engine requirements)
 FROM node:20-alpine
 
 # Set working directory
@@ -6,26 +6,26 @@ WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copy the rest of the app
 COPY . .
 
-# Generate Prisma client (this doesn't need database connection)
-RUN npx prisma generate
+# Copy the .env file into the container (make sure it exists in root)
+COPY .env .env
 
-# Build the NestJS app
-RUN npm run build
+# Generate Prisma client
+RUN npx prisma generate
 
 # Expose the app port
 EXPOSE 3000
 
-# Create an entrypoint script that runs migrations before starting the app
+# Copy entrypoint script and give permission
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Use the entrypoint script
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-# Start the app
+# Default command (start production build)
 CMD ["node", "dist/main"]
