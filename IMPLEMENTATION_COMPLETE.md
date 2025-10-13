@@ -2,7 +2,7 @@
 
 ## 🎉 Summary
 
-Your Moment Budget API has been successfully enhanced with comprehensive Paystack transfer integration, beneficiary management, financial goals, recurring expenses, and advanced spending insights!
+Moment Budget API has been successfully enhanced with comprehensive Paystack transfer integration, beneficiary management, financial goals, recurring expenses, and advanced spending insights!
 
 ---
 

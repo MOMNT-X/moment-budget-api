@@ -119,13 +119,32 @@ export class BudgetService {
     });
     const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
 
-    // 3. Remaining
-    const remaining = totalBudget - totalSpent / 100; // convert kobo to naira
+    // Convert totalSpent from kobo → naira
+    const totalSpentNaira = totalSpent / 100;
 
+    // 3. Remaining
+    const remaining = totalBudget - totalSpentNaira;
+
+    // 4. Determine budget status
+    const status = totalSpentNaira > totalBudget ? 'overbudget' : 'underbudget';
+    const difference = Math.abs(totalBudget - totalSpentNaira);
+
+    // 5. Calculate usage percentage
+    const percentageUsed =
+      totalBudget > 0 ? (totalSpentNaira / totalBudget) * 100 : 0;
+
+    // 6. Return combined summary + status
     return {
       totalBudget,
-      totalSpent,
+      totalSpent: totalSpentNaira,
       remaining,
+      status,
+      difference,
+      percentageUsed: Number(percentageUsed.toFixed(2)),
+      message:
+        status === 'overbudget'
+          ? `You have exceeded your budget by ₦${difference.toFixed(2)}`
+          : `You are within your budget, ₦${difference.toFixed(2)} remaining`,
     };
   }
 }
