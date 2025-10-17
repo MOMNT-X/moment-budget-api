@@ -12,11 +12,6 @@ export class TransactionsService {
     private readonly paystackService: PaystackService,
   ) {}
 
-  /**
-   * Creates a Paystack payment intent and stores a 'pending' transaction.
-   * dto.amount is assumed to be in NAIRA here; convert to KOBO for storage + Paystack.
-   * If your DTO is already KOBO, drop the *100.
-   */
   async create(userId: string, email: string, dto: CreateTransactionDto) {
     if (!email) throw new BadRequestException('User email is required');
 
@@ -54,24 +49,20 @@ export class TransactionsService {
 
   async confirmPayment(reference: string) {
     const verified = await this.paystackService.verifyPayment(reference);
+    const existing = await this.prisma.transaction.findFirst({ where: { reference } });
 
-    const existing = await this.prisma.transaction.findFirst({
-      where: { reference },
-    });
-    if (!existing)
-      throw new BadRequestException('Transaction not found for reference');
+    if (!existing) throw new BadRequestException('Transaction not found for reference');
 
     if (verified.status === 'success') {
       const updated = await this.prisma.transaction.update({
-        where: { id: existing.id }, // use unique ID
+        where: { id: existing.id },
         data: { status: 'success' },
       });
 
-      // Adjust wallet after success
       if (updated.type === 'INCOME') {
         await this.prisma.wallet.update({
           where: { userId: updated.userId },
-          data: { balance: { increment: updated.amount } }, // kobo
+          data: { balance: { increment: updated.amount } },
         });
       } else if (updated.type === 'EXPENSE') {
         await this.prisma.wallet.update({
@@ -89,20 +80,40 @@ export class TransactionsService {
     }
   }
 
+  // ✅ findAll with flexible date filtering + sorting
   async findAll(userId: string, filters: FilterTransactionDto) {
-    const { type, minAmount, maxAmount, startDate, endDate } = filters;
+    const {
+      type,
+      minAmount,
+      maxAmount,
+      startDate,
+      endDate,
+      sortBy,
+      sortOrder,
+    } = filters;
+
+    const where: any = {
+      userId,
+      ...(type && { type }),
+      ...(minAmount && { amount: { gte: minAmount * 100 } }),
+      ...(maxAmount && { amount: { lte: maxAmount * 100 } }),
+    };
+
+    // ✅ Flexible date filtering logic
+    if (startDate && endDate) {
+      where.timestamp = { gte: new Date(startDate), lte: new Date(endDate) };
+    } else if (startDate) {
+      where.timestamp = { gte: new Date(startDate) };
+    } else if (endDate) {
+      where.timestamp = { lte: new Date(endDate) };
+    }
+
+    const orderByField = sortBy || 'timestamp';
+    const orderDirection = sortOrder === 'asc' ? 'asc' : 'desc';
+
     return this.prisma.transaction.findMany({
-      where: {
-        userId,
-        ...(type && { type: type as any }),
-        ...(minAmount && { amount: { gte: minAmount } }),
-        ...(maxAmount && { amount: { lte: maxAmount } }),
-        ...(startDate &&
-          endDate && {
-            timestamp: { gte: new Date(startDate), lte: new Date(endDate) },
-          }),
-      },
-      orderBy: { timestamp: 'desc' },
+      where,
+      orderBy: { [orderByField]: orderDirection },
     });
   }
 

@@ -8,12 +8,15 @@ import {
   Req,
   Param,
   Query,
+  Put,
+  Delete,
 } from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common/exceptions/forbidden.exception';
 import { BadRequestException } from '@nestjs/common/exceptions/bad-request.exception';
 import { JwtGuard } from '../auth/jwt.guard';
 import { BudgetService } from './budget.service';
 import { CreateBudgetDto } from './dto/create-budget.dto';
+import { UpdateBudgetDto } from './dto/update-budget.dto';
 
 @Controller('budgets')
 @UseGuards(JwtGuard)
@@ -27,9 +30,9 @@ export class BudgetController {
   }
 
   @Post()
-  create(@Body() dto: CreateBudgetDto, @Req() req) {
+  create(@Body() dto: CreateBudgetDto, @Req() req, ) {
     const userId = this.getUserId(req);
-    return this.budgetService.createBudget(userId, dto);
+    return this.budgetService.create(userId, dto);
   }
 
   @Get()
@@ -63,5 +66,22 @@ export class BudgetController {
       message: `Budget summary fetched successfully (${summary.status})`,
       data: summary,
     };
+  }
+
+  @Put(':id')
+  update(
+    @Param('id') budgetId: string,
+    @Body() dto: UpdateBudgetDto,
+    @Req() req,
+  ) {
+    const userId = req.user.userId;
+    return this.budgetService.update(budgetId, userId, dto);
+  }
+
+  // DELETE /budgets/:id - Delete budget
+  @Delete(':id')
+  delete(@Param('id') budgetId: string, @Req() req) {
+    const userId = req.user.userId;
+    return this.budgetService.delete(budgetId, userId);
   }
 }

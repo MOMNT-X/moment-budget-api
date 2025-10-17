@@ -74,6 +74,60 @@ export class CategoryService {
     });
   }
 
+  async findCategoriesWithBudgets(userId: string) {
+  // Get all budgets for the user with their categories
+  const budgets = await this.prisma.budget.findMany({
+    where: { 
+      userId,
+      amount: { gt: 0 } // Only budgets with amount > 0
+    },
+    include: {
+      category: true
+    },
+    orderBy: {
+      category: {
+        name: 'asc'
+      }
+    }
+  });
+
+  // Group by category and calculate total budget + spent
+  const categoryMap = new Map();
+  
+  for (const budget of budgets) {
+    const categoryId = budget.categoryId;
+    
+    if (!categoryMap.has(categoryId)) {
+      // Get total spent for this category
+      const transactions = await this.prisma.transaction.findMany({
+        where: {
+          userId,
+          categoryId,
+          type: 'EXPENSE'
+        }
+      });
+      
+      const totalSpent = transactions.reduce((sum, t) => sum + t.amount, 0);
+      
+      categoryMap.set(categoryId, {
+        id: budget.category.id,
+        name: budget.category.name,
+        isDefault: budget.category.isDefault,
+        budgetLimit: budget.amount, // This is in naira
+        spent: totalSpent, // This is in kobo from transactions
+        remaining: budget.amount - (totalSpent / 100) // Convert kobo to naira
+      });
+    } else {
+      // Add to existing budget limit if multiple budgets exist
+      const existing = categoryMap.get(categoryId);
+      existing.budgetLimit += budget.amount;
+      existing.remaining = existing.budgetLimit - (existing.spent / 100);
+    }
+  }
+
+  return Array.from(categoryMap.values());
+}
+
   // Delete custom category (only if user owns it)
   async deleteCustomCategory(categoryId: string, userId: string) {
     const category = await this.prisma.budgetCategory.findUnique({

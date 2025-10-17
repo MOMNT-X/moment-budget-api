@@ -1,13 +1,19 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../user/user.service';
-import { WalletService } from '../wallet/wallet.service'; // Add this import
+import { WalletService } from '../wallet/wallet.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { PaystackService } from '../pay-stack/pay-stack.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { InternalServerErrorException } from '@nestjs/common/exceptions';
 
 @Injectable()
 export class AuthService {
@@ -18,136 +24,184 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly paystackService: PaystackService,
     private readonly prisma: PrismaService,
-    private readonly walletService: WalletService, // Add this injection
+    private readonly walletService: WalletService,
   ) {}
 
   async signup(dto: SignupDto) {
-    const hashed = await bcrypt.hash(dto.password, 10);
-
-    let user;
-    let wallet: any = null; // Fix typing issue
-
     try {
-      user = await this.usersService.create({
-        ...dto,
-        password: hashed,
-      });
-    } catch (err) {
-      if (err.code === 'P2002') {
-        throw new Error(`User with this ${err.meta.target} already exists`);
-      }
-      throw err;
-    }
+      const hashed = await bcrypt.hash(dto.password, 10);
+      let user;
+      let wallet: any = null;
 
-    // Create wallet for the user
-    try {
-      if (dto.bankCode && dto.accountNumber) {
-        // If user provided bank details, create wallet with Paystack integration
-        const businessName =
-          dto.firstName && dto.lastName
-            ? `${dto.firstName} ${dto.lastName}`
-            : dto.username;
-
-        wallet = await this.walletService.createWalletForUser(
-          user.id,
-          user.email,
-          businessName,
-          dto.bankCode,
-          dto.accountNumber,
-        );
-
-        this.logger.log(
-          `Created wallet with Paystack integration for user ${user.id}`,
-        );
-      } else {
-        // Create basic wallet without Paystack integration
-        wallet = await this.prisma.wallet.create({
-          data: {
-            userId: user.id,
-            balance: 0, // starting balance in kobo
-            currency: 'NGN',
-          },
+      // 👤 Create user
+      try {
+        user = await this.usersService.create({
+          ...dto,
+          password: hashed,
         });
+      } catch (err: any) {
+        this.logger.error(`User creation failed: ${err.message}`, err.stack);
 
-        this.logger.log(`Created basic wallet for user ${user.id}`);
+        // Prisma duplicate record error
+        if (err.code === 'P2002') {
+          throw new ConflictException(
+            `A user with this ${err.meta?.target?.join(', ') || 'credential'} already exists`,
+          );
+        }
+
+        // Handle other Prisma errors
+        if (err.code) {
+          throw new BadRequestException(`Database error: ${err.message}`);
+        }
+
+        throw new InternalServerErrorException(
+          'Failed to create user. Please try again later.',
+        );
       }
-    } catch (err) {
-      this.logger.error(
-        `Failed to create wallet for user ${user.id}`,
-        err.stack,
+
+      // 💳 Create wallet
+      try {
+        if (dto.bankCode && dto.accountNumber) {
+          const businessName =
+            dto.firstName && dto.lastName
+              ? `${dto.firstName} ${dto.lastName}`
+              : dto.username;
+
+          wallet = await this.walletService.createWalletForUser(
+            user.id,
+            user.email,
+            businessName,
+            dto.bankCode,
+            dto.accountNumber,
+          );
+
+          this.logger.log(`Wallet created via Paystack for user ${user.id}`);
+        } else {
+          wallet = await this.prisma.wallet.create({
+            data: {
+              userId: user.id,
+              balance: 0,
+              currency: 'NGN',
+            },
+          });
+          this.logger.log(`Basic wallet created for user ${user.id}`);
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `Wallet creation failed for user ${user.id}: ${err.message}`,
+          err.stack,
+        );
+
+        // Propagate specific failure reasons if Paystack or DB fails
+        if (err.response?.data?.message) {
+          throw new BadRequestException(
+            `Wallet creation failed: ${err.response.data.message}`,
+          );
+        }
+
+        throw new InternalServerErrorException(
+          'Failed to create wallet. Please verify your bank details and try again.',
+        );
+      }
+
+      // 🔑 JWT payload
+      const tokenPayload = await this.signToken(user.id, user.email);
+
+      // ✅ Return enriched, consistent response
+      return {
+        ...tokenPayload,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstname: user.firstName,
+          lastname: user.lastName,
+          username: user.username,
+        },
+        wallet: wallet
+          ? {
+              id: wallet.id,
+              balance: wallet.balance,
+              subaccountCode: wallet.paystackSubaccountCode,
+              accountNumber: wallet.paystackAccountNumber,
+              bankName: wallet.paystackBankName,
+              recipientCode: wallet.paystackRecipientCode,
+            }
+          : null,
+      };
+    } catch (error) {
+      this.logger.error(`Signup process failed: ${error.message}`, error.stack);
+
+      // Re-throw if already handled with an HTTP exception
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof ConflictException ||
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'An unexpected error occurred during signup.',
       );
-      throw new InternalServerErrorException('Wallet creation failed');
     }
-    // You might want to decide if you want to delete the user if wallet creation fails
-    // or just continue without a wallet
-
-    // 🔑 generate JWT
-    const tokenPayload = await this.signToken(user.id, user.email);
-
-    // enriched response
-    return {
-      ...tokenPayload,
-      user: {
-        ...tokenPayload.user,
-        firstname: user.firstName,
-        lastname: user.lastName,
-        username: user.username,
-      },
-      wallet: wallet
-        ? {
-            id: wallet.id,
-            balance: wallet.balance,
-            subaccountCode: wallet.paystackSubaccountCode,
-            accountNumber: wallet.paystackAccountNumber,
-            bankName: wallet.paystackBankName,
-            recipientCode: wallet.paystackRecipientCode,
-          }
-        : null,
-    };
   }
 
   async login(dto: LoginDto) {
-    const user = await this.usersService.findByEmail(dto.email);
-    if (!user) {
-      throw new UnauthorizedException('No account found with this email');
+    try {
+      const user = await this.usersService.findByEmail(dto.email);
+      if (!user) {
+        throw new UnauthorizedException(
+          'No account found with this email address.',
+        );
+      }
+
+      if (!user.password) {
+        throw new UnauthorizedException('Invalid login credentials.');
+      }
+
+      const valid = await bcrypt.compare(dto.password, user.password);
+      if (!valid) {
+        throw new UnauthorizedException(
+          'Incorrect password. Please try again.',
+        );
+      }
+
+      const wallet = await this.prisma.wallet.findUnique({
+        where: { userId: user.id },
+      });
+
+      const tokenPayload = await this.signToken(user.id, user.email);
+
+      return {
+        ...tokenPayload,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstname: user.firstName,
+          lastname: user.lastName,
+          username: user.username,
+        },
+        wallet: wallet
+          ? {
+              id: wallet.id,
+              balance: wallet.balance,
+              subaccountCode: wallet.paystackSubaccountCode,
+              accountNumber: wallet.paystackAccountNumber,
+              bankName: wallet.paystackBankName,
+              businessName: wallet.paystackBusinessName,
+            }
+          : null,
+      };
+    } catch (error) {
+      this.logger.error(`Login failed: ${error.message}`, error.stack);
+
+      if (error instanceof UnauthorizedException) throw error;
+
+      throw new InternalServerErrorException(
+        'An unexpected error occurred during login.',
+      );
     }
-
-    if (!user.password) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-    const valid = await bcrypt.compare(dto.password, user.password);
-    if (!valid) {
-      throw new UnauthorizedException('Incorrect password, please try again');
-    }
-
-    // Fetch wallet info
-    const wallet = await this.prisma.wallet.findUnique({
-      where: { userId: user.id },
-    });
-
-    // Generate JWT token
-    const tokenPayload = await this.signToken(user.id, user.email);
-
-    // Return enriched response
-    return {
-      ...tokenPayload,
-      user: {
-        ...tokenPayload.user,
-        firstname: user.firstName,
-        lastname: user.lastName,
-        username: user.username,
-      },
-      wallet: wallet
-        ? {
-            id: wallet.id,
-            balance: wallet.balance,
-            subaccountCode: wallet.paystackSubaccountCode,
-            accountNumber: wallet.paystackAccountNumber,
-            bankName: wallet.paystackBankName,
-            businessName: wallet.paystackBusinessName,
-          }
-        : null,
-    };
   }
 
   private async signToken(userId: string, email: string) {

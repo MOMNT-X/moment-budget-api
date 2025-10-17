@@ -10,17 +10,13 @@ export class UserController {
   constructor(private readonly userService: UsersService) {}
 
   @UseGuards(JwtGuard)
-  /* @Put('income')
-  async updateIncome(@Req() req, @Body('income') income: number) {
-    return this.userService.updateIncome(req.user.sub, income);
-  } */
   @Patch('income')
   updateIncome(@GetUser('id') userId: string, @Body() dto: UpdateIncomeDto) {
     return this.userService.updateIncome(userId, dto.income);
   }
-
+  @UseGuards(JwtGuard)
   @Patch('update-profile')
-  update(@GetUser('id') userId: string, @Body() dto: UpdateUserDto) {
+  update(@GetUser('userId') userId: string, @Body() dto: UpdateUserDto) {
     return this.userService.update(userId, dto);
   }
 }

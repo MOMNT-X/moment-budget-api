@@ -1,22 +1,166 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBudgetDto } from './dto/create-budget.dto';
+import { UpdateBudgetDto } from './dto/update-budget.dto';
 import { addDays, addWeeks, addMonths } from 'date-fns';
 
 @Injectable()
 export class BudgetService {
   constructor(private prisma: PrismaService) {}
 
-  async createBudget(userId: string, dto: CreateBudgetDto) {
-    const budget = await this.prisma.budget.create({
-      data: {
+  async create(userId: string, dto: CreateBudgetDto) {
+    // Check if there's already an active budget for this category
+    const existingBudget = await this.prisma.budget.findFirst({
+      where: {
         userId,
+        categoryId: dto.categoryId,
+        endDate: { gte: new Date() }, // Active budget (not ended yet)
+      },
+      include: {
+        category: true,
+      },
+    });
+
+    if (existingBudget) {
+      throw new ConflictException({
+        message: `An active budget for "${existingBudget.category.name}" already exists`,
+        existingBudget: {
+          id: existingBudget.id,
+          amount: existingBudget.amount,
+          startDate: existingBudget.startDate,
+          endDate: existingBudget.endDate,
+          recurring: existingBudget.recurring,
+          frequency: existingBudget.frequency,
+        },
+      });
+    }
+
+    // Calculate next run date if recurring
+    let nextRunDate: Date | null = null;
+    if (dto.recurring && dto.frequency) {
+      const base = new Date(dto.endDate);
+      switch (dto.frequency) {
+        case 'DAILY':
+          nextRunDate = addDays(base, 1);
+          break;
+        case 'WEEKLY':
+          nextRunDate = addWeeks(base, 1);
+          break;
+        case 'MONTHLY':
+          nextRunDate = addMonths(base, 1);
+          break;
+      }
+    }
+
+    return this.prisma.budget.create({
+      data: {
         ...dto,
+        userId,
+        nextRunDate,
         startDate: new Date(dto.startDate),
         endDate: new Date(dto.endDate),
       },
+      include: {
+        category: true,
+      },
     });
-    return budget;
+  }
+
+  // NEW: Update existing budget
+  async update(budgetId: string, userId: string, dto: UpdateBudgetDto) {
+    // Check if budget exists and belongs to user
+    const existingBudget = await this.prisma.budget.findUnique({
+      where: { id: budgetId },
+      include: { category: true },
+    });
+
+    if (!existingBudget) {
+      throw new NotFoundException('Budget not found');
+    }
+
+    if (existingBudget.userId !== userId) {
+      throw new BadRequestException('You can only update your own budgets');
+    }
+
+    // If changing category, check for conflicts
+    if (dto.categoryId && dto.categoryId !== existingBudget.categoryId) {
+      const conflictingBudget = await this.prisma.budget.findFirst({
+        where: {
+          userId,
+          categoryId: dto.categoryId,
+          endDate: { gte: new Date() },
+          id: { not: budgetId }, // Exclude current budget
+        },
+        include: { category: true },
+      });
+
+      if (conflictingBudget) {
+        throw new ConflictException({
+          message: `An active budget for "${conflictingBudget.category.name}" already exists`,
+          existingBudget: {
+            id: conflictingBudget.id,
+            amount: conflictingBudget.amount,
+            startDate: conflictingBudget.startDate,
+            endDate: conflictingBudget.endDate,
+          },
+        });
+      }
+    }
+
+    // Calculate next run date if recurring settings changed
+    let nextRunDate: Date | null = existingBudget.nextRunDate;
+    const recurring = dto.recurring ?? existingBudget.recurring;
+    const frequency = dto.frequency ?? existingBudget.frequency;
+    const endDate = dto.endDate ? new Date(dto.endDate) : existingBudget.endDate;
+
+    if (recurring && frequency) {
+      const base = endDate;
+      switch (frequency) {
+        case 'DAILY':
+          nextRunDate = addDays(base, 1);
+          break;
+        case 'WEEKLY':
+          nextRunDate = addWeeks(base, 1);
+          break;
+        case 'MONTHLY':
+          nextRunDate = addMonths(base, 1);
+          break;
+      }
+    } else {
+      nextRunDate = null;
+    }
+
+    return this.prisma.budget.update({
+      where: { id: budgetId },
+      data: {
+        ...dto,
+        nextRunDate,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+      },
+      include: {
+        category: true,
+      },
+    });
+  }
+
+  // NEW: Delete budget
+  async delete(budgetId: string, userId: string) {
+    const budget = await this.prisma.budget.findUnique({
+      where: { id: budgetId },
+    });
+
+    if (!budget) {
+      throw new NotFoundException('Budget not found');
+    }
+
+    if (budget.userId !== userId) {
+      throw new BadRequestException('You can only delete your own budgets');
+    }
+
+    return this.prisma.budget.delete({
+      where: { id: budgetId },
+    });
   }
 
   async getUserBudgets(userId: string) {
@@ -52,33 +196,6 @@ export class BudgetService {
         },
       });
     }
-  }
-
-  create(dto: CreateBudgetDto, userId: string) {
-    let nextRunDate: Date | null = null;
-
-    if (dto.recurring && dto.frequency) {
-      const base = new Date(dto.endDate);
-      switch (dto.frequency) {
-        case 'DAILY':
-          nextRunDate = addDays(base, 1);
-          break;
-        case 'WEEKLY':
-          nextRunDate = addWeeks(base, 1);
-          break;
-        case 'MONTHLY':
-          nextRunDate = addMonths(base, 1);
-          break;
-      }
-    }
-
-    return this.prisma.budget.create({
-      data: {
-        ...dto,
-        userId,
-        nextRunDate,
-      },
-    });
   }
 
   async getBudgetSummary(

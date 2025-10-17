@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, IsIn } from 'class-validator';
 import { TransactionType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
@@ -24,4 +24,13 @@ export class FilterTransactionDto {
   @IsOptional()
   @IsString()
   endDate?: string;
+
+  // ✅ New fields for sorting
+  @IsOptional()
+  @IsIn(['timestamp', 'amount', 'description'])
+  sortBy?: string;
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 }

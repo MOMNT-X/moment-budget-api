@@ -1,10 +1,10 @@
 // src/categories/categories.controller.ts
-import { 
-  Controller, 
-  Post, 
-  Get, 
+import {
+  Controller,
+  Post,
+  Get,
   Delete,
-  Body, 
+  Body,
   Req,
   Param,
   UseGuards,
@@ -36,6 +36,12 @@ export class CategoryController {
   @Get()
   findAll() {
     return this.categoryService.findAll();
+  }
+
+  @Get('with-budgets')
+  findCategoriesWithBudgets(@Req() req) {
+    const userId = req.user.userId;
+    return this.categoryService.findCategoriesWithBudgets(userId);
   }
 
   // DELETE /categories/:id - Delete custom category
